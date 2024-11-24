@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <uuid/uuid.h>
+#include <regex>
 #include "db/sqlite3.h"
 #include "utilities/utils.h"
 #include "utilities/configs.h"
@@ -442,7 +443,14 @@ Usuario DatabaseManager::createUser()
     std::cout << "\033[1;33mIngrese la contraseña:\033[0m ";
     std::cin >> password;
     std::cout << "\033[1;33mIngrese el teléfono:\033[0m ";
-    std::getline(std::cin, telefono);
+    std::cin.ignore();
+    std::cin >> telefono;
+    while (telefono.length() != 10 || !std::all_of(telefono.begin(), telefono.end(), ::isdigit))
+    {
+        Utils::printError("El teléfono debe tener 10 dígitos.");
+        std::cout << "\033[1;33mIngrese el teléfono:\033[0m ";
+        std::cin >> telefono;
+    }
 
     Cuenta nuevaCuenta(0.0);
     std::string id = nuevaCuenta.getId();
@@ -552,7 +560,16 @@ int main()
     {
         std::vector<std::string> menuOptions = {"Iniciar Sesión", "Crear Usuario", "Salir"};
         Utils::printMenu(menuOptions);
-        std::cin >> opcion;
+        std::string input;
+        std::cin >> input;
+        if (std::all_of(input.begin(), input.end(), ::isdigit))
+        {
+            opcion = std::stoi(input);
+        }
+        else
+        {
+            opcion = -1; // Invalid option
+        }
 
         if (opcion == 3)
         {
@@ -566,6 +583,12 @@ int main()
             case 1:
                 std::cout << "\033[1;33mIngrese su nombre de matrícula:\033[0m ";
                 std::cin >> matricula;
+                while (matricula.length() != 7 || !std::all_of(matricula.begin(), matricula.end(), ::isdigit))
+                {
+                    Utils::printError("La matrícula debe tener 7 dígitos.");
+                    std::cout << "\033[1;33mIngrese su nombre de matrícula:\033[0m ";
+                    std::cin >> matricula;
+                }
                 std::cout << "\033[1;33mIngrese su contraseña:\033[0m ";
                 std::cin >> contrasena;
                 usuario.setMatricula(matricula);
@@ -596,7 +619,16 @@ int main()
     {
         std::vector<std::string> menuOptions = {"Abonar a mi cuenta", "Eliminar mi cuenta", "Comprar boleto", "Usar boleto", "Mostrar cuenta", "Agregar Tarjeta", "Mostrar tarjetas", "Mostrar Transacciones", "Mostrar Boletos", "Salir"};
         Utils::printMenu(menuOptions);
-        std::cin >> opcion;
+        std::string input;
+        std::cin >> input;
+        if (std::all_of(input.begin(), input.end(), ::isdigit))
+        {
+            opcion = std::stoi(input);
+        }
+        else
+        {
+            opcion = -1; // Invalid option
+        }
 
         if (opcion == 10)
         {
@@ -619,7 +651,14 @@ int main()
                     usuario.getCuenta().mostrarTarjetas();
                     int tarjetaIndex;
                     std::cout << "\033[1;33mIngrese el índice de la tarjeta:\033[0m ";
-                    std::cin >> tarjetaIndex;
+                    std::string tarjetaIndexStr;
+                    std::cin >> tarjetaIndexStr;
+                    if (!std::all_of(tarjetaIndexStr.begin(), tarjetaIndexStr.end(), ::isdigit))
+                    {
+                        Utils::printError("Índice de tarjeta inválido.");
+                        break;
+                    }
+                    tarjetaIndex = std::stoi(tarjetaIndexStr);
                     if (tarjetaIndex < 0 || tarjetaIndex >= usuario.getCuenta().getTarjetasBancarias().size())
                     {
                         Utils::printError("Índice de tarjeta inválido.");
@@ -627,7 +666,15 @@ int main()
                     }
                     double cantidad;
                     std::cout << "\033[1;33mIngrese la cantidad a abonar:\033[0m ";
-                    std::cin >> cantidad;
+                    std::string cantidadStr;
+                    std::cin >> cantidadStr;
+                    while (!std::all_of(cantidadStr.begin(), cantidadStr.end(), ::isdigit))
+                    {
+                        Utils::printError("Cantidad inválida. Ingrese solo dígitos.");
+                        std::cout << "\033[1;33mIngrese la cantidad a abonar:\033[0m ";
+                        std::cin >> cantidadStr;
+                    }
+                    cantidad = std::stod(cantidadStr);
 
                     Transaccion transaccion(cantidad, StatusTransaccion::Abono, usuario.getMatricula(), usuario.getCuenta().getTarjetasBancarias()[tarjetaIndex].getId());
                     DatabaseManager::getInstance().registerTransaction(transaccion);
@@ -635,7 +682,19 @@ int main()
                 }
                 break;
             case 2:
-                usuario.eliminarCuenta();
+                char confirmacion;
+                std::cout << "\033[1;33m¿Está seguro que desea eliminar su cuenta? (s/n):\033[0m ";
+                std::cin >> confirmacion;
+                if (confirmacion == 's' || confirmacion == 'S')
+                {
+                    usuario.eliminarCuenta();
+                    Utils::printSuccess("Cuenta eliminada exitosamente. Saliendo...");
+                    exit(0);
+                }
+                else
+                {
+                    Utils::printSuccess("Eliminación de cuenta cancelada.");
+                }
                 break;
             case 3:
                 std::cout << "\033[1;33mSeleccione el método de pago:\033[0m\n";
@@ -722,7 +781,15 @@ int main()
                 }
                 int boletoIndex;
                 std::cout << "\033[1;33mIngrese el índice del boleto a usar:\033[0m ";
-                std::cin >> boletoIndex;
+                std::string boletoIndexStr;
+                std::cin >> boletoIndexStr;
+                while (!std::all_of(boletoIndexStr.begin(), boletoIndexStr.end(), ::isdigit))
+                {
+                    Utils::printError("Índice de boleto inválido. Ingrese solo dígitos.");
+                    std::cout << "\033[1;33mIngrese el índice del boleto a usar:\033[0m ";
+                    std::cin >> boletoIndexStr;
+                }
+                boletoIndex = std::stoi(boletoIndexStr);
 
                 if (boletoIndex < 0 || boletoIndex >= boletosValidos.size())
                 {
@@ -759,8 +826,20 @@ int main()
                 std::string numero, fechaExpiracion, cvv;
                 std::cout << "\033[1;33mIngrese el número de la tarjeta:\033[0m ";
                 std::cin >> numero;
+                while (!std::regex_match(numero, std::regex("^(?:4[0-9]{12}(?:[0-9]{3})?|[25][1-7][0-9]{14}|6(?:011|5[0-9][0-9])[0-9]{12}|3[47][0-9]{13}|3(?:0[0-5]|[68][0-9])[0-9]{11}|(?:2131|1800|35[0-9]{3})[0-9]{11})$")))
+                {
+                    Utils::printError("Ingrese tarjeta válida (Visa o MasterCard).");
+                    std::cout << "\033[1;33mIngrese el número de la tarjeta:\033[0m ";
+                    std::cin >> numero;
+                }
                 std::cout << "\033[1;33mIngrese la fecha de expiración (MM/AA):\033[0m ";
                 std::cin >> fechaExpiracion;
+                while (!std::regex_match(fechaExpiracion, std::regex("^(0[1-9]|1[0-2])\\/([2-9][0-9])$")))
+                {
+                    Utils::printError("Ingrese una expiración en formato MM/YY.");
+                    std::cout << "\033[1;33mIngrese la fecha de expiración (MM/YY):\033[0m ";
+                    std::cin >> fechaExpiracion;
+                }
                 std::cout << "\033[1;33mIngrese el CVV:\033[0m ";
                 std::cin >> cvv;
                 TarjetaBancaria nuevaTarjeta(numero, fechaExpiracion, cvv);

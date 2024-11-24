@@ -138,52 +138,33 @@ public:
 
     Boleto comprarBoleto()
     {
-        if (saldo >= Config::getInstance().getBoletoCosto())
+        std::time_t t = std::time(nullptr);
+        std::tm *tm = std::localtime(&t);
+        tm->tm_mday += 10;
+        std::mktime(tm);
+        char buffer[11];
+        std::strftime(buffer, sizeof(buffer), "%Y-%m-%d", tm);
+        std::string fechaExpiracion(buffer);
+        Boleto nuevoBoleto(fechaExpiracion, StatusBoleto::Nuevo);
+        boletos.push_back(nuevoBoleto);
+
+        // Insertar el boleto en la base de datos
+        std::string sqlInsertBoleto = "INSERT INTO BOLETOS (ID, EXPIRACION, STATUS, CUENTA) VALUES ('" +
+                                      nuevoBoleto.getId() + "', '" + fechaExpiracion + "', 'nuevo', '" + id + "');";
+        char *zErrMsg = 0;
+        int rc = sqlite3_exec(DatabaseManager::getInstance().getDB(), sqlInsertBoleto.c_str(), nullptr, 0, &zErrMsg);
+
+        if (rc != SQLITE_OK)
         {
-            saldo -= Config::getInstance().getBoletoCosto();
-            std::time_t t = std::time(nullptr);
-            std::tm *tm = std::localtime(&t);
-            tm->tm_mday += 10;
-            std::mktime(tm);
-            char buffer[11];
-            std::strftime(buffer, sizeof(buffer), "%Y-%m-%d", tm);
-            std::string fechaExpiracion(buffer);
-            Boleto nuevoBoleto(fechaExpiracion, StatusBoleto::Nuevo);
-            boletos.push_back(nuevoBoleto);
-
-            // Insertar el boleto en la base de datos
-            std::string sqlInsertBoleto = "INSERT INTO BOLETOS (ID, EXPIRACION, STATUS, CUENTA) VALUES ('" +
-                                          nuevoBoleto.getId() + "', '" + fechaExpiracion + "', 'nuevo', '" + id + "');";
-            char *zErrMsg = 0;
-            int rc = sqlite3_exec(DatabaseManager::getInstance().getDB(), sqlInsertBoleto.c_str(), nullptr, 0, &zErrMsg);
-
-            if (rc != SQLITE_OK)
-            {
-                Utils::printError("Error al insertar el boleto en la base de datos: " + std::string(zErrMsg));
-                sqlite3_free(zErrMsg);
-                throw std::runtime_error("Error al insertar el boleto en la base de datos.");
-            }
-            else
-            {
-                // Actualizar el saldo en la base de datos
-                std::string sqlUpdateSaldo = "UPDATE CUENTAS SET SALDO = " + std::to_string(saldo) + " WHERE ID = '" + id + "';";
-                rc = sqlite3_exec(DatabaseManager::getInstance().getDB(), sqlUpdateSaldo.c_str(), nullptr, 0, &zErrMsg);
-
-                if (rc != SQLITE_OK)
-                {
-                    Utils::printError("Error al actualizar el saldo en la base de datos: " + std::string(zErrMsg));
-                    sqlite3_free(zErrMsg);
-                    throw std::runtime_error("Error al actualizar el saldo en la base de datos.");
-                }
-                Utils::printSuccess("Boleto insertado en la BD.");
-                Utils::printSuccess("Boleto comprado exitosamente.");
-                return nuevoBoleto;
-            }
+            Utils::printError("Error al insertar el boleto en la base de datos: " + std::string(zErrMsg));
+            sqlite3_free(zErrMsg);
+            throw std::runtime_error("Error al insertar el boleto en la base de datos.");
         }
         else
         {
-            Utils::printError("Saldo insuficiente para comprar un boleto.");
-            throw std::runtime_error("Error al insertar el boleto en la base de datos.");
+            Utils::printSuccess("Boleto insertado en la BD.");
+            Utils::printSuccess("Boleto comprado exitosamente.");
+            return nuevoBoleto;
         }
     }
 
@@ -297,9 +278,11 @@ public:
                   << "|                       \033[1;35mTransacción Info\033[0m                            |\n"
                   << "|                                                                  |\n"
                   << "====================================================================\n"
-                  << "\033[1;35mID de la Transa1cción:\033[0m \033[1;33m" << id << "\033[0m\n"
+                  << "\033[1;35mID de la Transacción:\033[0m \033[1;33m" << id << "\033[0m\n"
                   << "\033[1;35mMonto:\033[0m \033[1;33m$" << monto << "\033[0m\n"
-                  << "\033[1;35mEstado:\033[0m \033[1;33m" << (status == StatusTransaccion::Abono ? "Abono" : "Compra") << "\033[0m\n"
+                  << "\033[1;35mEstado:\033[0m \033[1;33m" << (status == StatusTransaccion::Abono ? "Abono" : status == StatusTransaccion::Tarjeta ? "Tarjeta"
+                                                                                                                                                   : "Compra")
+                  << "\033[0m\n"
                   << "\033[1;35mUsuario:\033[0m \033[1;33m" << usuario << "\033[0m\n"
                   << "\033[1;35mID de la Tarjeta:\033[0m \033[1;33m" << tarjetaId << "\033[0m\n"
                   << "====================================================================\n";
@@ -338,7 +321,6 @@ Usuario DatabaseManager::getUser(const std::string &matricula)
     sqlite3_finalize(stmt);
 
     Cuenta nuevaCuenta = getAccount(cuentaId);
-    std::cout << nuevaCuenta.getId() << std::endl;
 
     return Usuario(matricula, nombre, password, telefono, nuevaCuenta);
 }
@@ -364,8 +346,6 @@ Cuenta DatabaseManager::getAccount(const std::string &cuentaId)
     std::string idCuenta = reinterpret_cast<const char *>(sqlite3_column_text(stmtCuenta, 0));
     double saldo = sqlite3_column_double(stmtCuenta, 1);
     sqlite3_finalize(stmtCuenta);
-    std::cout << cuentaId << std::endl;
-    std::cout << idCuenta << std::endl;
     Cuenta nuevaCuenta(saldo);
     nuevaCuenta.setId(idCuenta);
     nuevaCuenta.setTarjetasBancarias(getCards(idCuenta));
@@ -521,7 +501,9 @@ void DatabaseManager::registerTransaction(Transaccion transaccion)
 {
     std::string sqlInsert = "INSERT INTO TRANSACCION (ID, MONTO, STATUS, USUARIO, TARJETAID) VALUES ('" +
                             transaccion.getId() + "', " + std::to_string(transaccion.getMonto()) + ", '" +
-                            (transaccion.getStatus() == StatusTransaccion::Abono ? "abono" : "compra") + "', '" +
+                            (transaccion.getStatus() == StatusTransaccion::Abono ? "abono" : transaccion.getStatus() == StatusTransaccion::Tarjeta ? "tarjeta"
+                                                                                                                                                   : "compra") +
+                            "', '" +
                             transaccion.getUsuario() + "', '" + transaccion.getTarjetaId() + "');";
     char *zErrMsg = 0;
     int rc = sqlite3_exec(getDB(), sqlInsert.c_str(), callback, 0, &zErrMsg);
@@ -664,7 +646,21 @@ int main()
                 {
                     if (usuario.getCuenta().getSaldo() >= Config::getInstance().getBoletoCosto())
                     {
+                        double newSaldo = usuario.getCuenta().getSaldo() - Config::getInstance().getBoletoCosto();
+                        usuario.getCuenta().setSaldo(newSaldo);
+                        char *zErrMsg = 0;
+                        std::string sqlUpdateSaldo = "UPDATE CUENTAS SET SALDO = " + std::to_string(newSaldo) + " WHERE ID = '" + usuario.getCuenta().getId() + "';";
+                        int rc = sqlite3_exec(DatabaseManager::getInstance().getDB(), sqlUpdateSaldo.c_str(), nullptr, 0, &zErrMsg);
+
+                        if (rc != SQLITE_OK)
+                        {
+                            Utils::printError("Error al actualizar el saldo en la base de datos: " + std::string(zErrMsg));
+                            sqlite3_free(zErrMsg);
+                            throw std::runtime_error("Error al actualizar el saldo en la base de datos.");
+                        }
                         Boleto boleto = usuario.getCuenta().comprarBoleto();
+                        Transaccion transaccion(Config::getInstance().getBoletoCosto(), StatusTransaccion::Compra, usuario.getMatricula(), "SALDO CUENTA");
+                        DatabaseManager::getInstance().registerTransaction(transaccion);
                         boleto.mostrar();
                     }
                     else
@@ -676,7 +672,7 @@ int main()
                 {
                     if (usuario.getCuenta().getTarjetasBancarias().empty())
                     {
-                        Utils::printError("No hay tarjetas de crédito. No puede comprar boleto.");
+                        Utils::printError("No hay tarjetas de crédito.");
                     }
                     else
                     {
@@ -691,7 +687,7 @@ int main()
                         }
                         else
                         {
-                            Transaccion transaccion(Config::getInstance().getBoletoCosto(), StatusTransaccion::Compra, usuario.getMatricula(), usuario.getCuenta().getTarjetasBancarias()[tarjetaIndex].getId());
+                            Transaccion transaccion(Config::getInstance().getBoletoCosto(), StatusTransaccion::Tarjeta, usuario.getMatricula(), usuario.getCuenta().getTarjetasBancarias()[tarjetaIndex].getId());
                             DatabaseManager::getInstance().registerTransaction(transaccion);
                             Boleto boleto = usuario.getCuenta().comprarBoleto();
                             boleto.mostrar();
@@ -747,7 +743,8 @@ int main()
                     std::string idTransaccion = reinterpret_cast<const char *>(sqlite3_column_text(stmtTransacciones, 0));
                     double monto = sqlite3_column_double(stmtTransacciones, 1);
                     std::string statusStr = reinterpret_cast<const char *>(sqlite3_column_text(stmtTransacciones, 2));
-                    StatusTransaccion status = (statusStr == "abono") ? StatusTransaccion::Abono : StatusTransaccion::Compra;
+                    StatusTransaccion status = (statusStr == "abono") ? StatusTransaccion::Abono : (statusStr == "tarjeta") ? StatusTransaccion::Tarjeta
+                                                                                                                            : StatusTransaccion::Compra;
                     std::string usuarioTransaccion = reinterpret_cast<const char *>(sqlite3_column_text(stmtTransacciones, 3));
                     std::string tarjetaId = reinterpret_cast<const char *>(sqlite3_column_text(stmtTransacciones, 4));
                     transacciones.emplace_back(monto, status, usuarioTransaccion, tarjetaId);

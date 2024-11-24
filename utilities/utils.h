@@ -68,6 +68,7 @@ public:
         uuid_unparse(uuid, uuid_str);
         return std::string(uuid_str);
     }
+
     static void printMenu(const std::vector<std::string> &items)
     {
         std::cout << "\033[1;34m";

@@ -8,5 +8,6 @@ enum class StatusBoleto
 enum class StatusTransaccion
 {
     Abono,
-    Compra
+    Compra,
+    Tarjeta
 };

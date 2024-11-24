@@ -10,6 +10,7 @@ public:
     const std::string &getDbName() const { return dbName; }
     void setDbName(const std::string &name) { dbName = name; }
     double getBoletoCosto() const { return 7.5; }
+    int getExpiration() const { return 10; }
 
 private:
     Config() : dbName("busup-v2.db") {}

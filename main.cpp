@@ -41,14 +41,10 @@ public:
     void mostrar() const
     {
         std::cout << "====================================================================\n"
-                  << "|                                                                  |\n"
-                  << "|                           \033[1;35mBoleto Info\033[0m                            |\n"
-                  << "|                                                                  |\n"
-                  << "====================================================================\n"
                   << "\033[1;35mID del Boleto:\033[0m \033[1;33m" << id << "\033[0m\n"
                   << "\033[1;35mFecha de Expiración:\033[0m \033[1;33m" << fechaExpiracion << "\033[0m\n"
                   << "\033[1;35mEstado:\033[0m \033[1;33m" << statusToString() << "\033[0m\n"
-                  << "====================================================================\n";
+                  << "--------------------------------------------------------------------\n";
     }
 
 private:
@@ -140,7 +136,7 @@ public:
     {
         std::time_t t = std::time(nullptr);
         std::tm *tm = std::localtime(&t);
-        tm->tm_mday += 10;
+        tm->tm_mday += Config::getInstance().getExpiration();
         std::mktime(tm);
         char buffer[11];
         std::strftime(buffer, sizeof(buffer), "%Y-%m-%d", tm);
@@ -434,11 +430,17 @@ Usuario DatabaseManager::createUser()
 
     std::cout << "\033[1;33mIngrese la matrícula:\033[0m ";
     std::cin >> matricula;
+    while (matricula.length() != 7 || !std::all_of(matricula.begin(), matricula.end(), ::isdigit))
+    {
+        Utils::printError("La matrícula debe tener 7 dígitos.");
+        std::cout << "\033[1;33mIngrese la matrícula:\033[0m ";
+        std::cin >> matricula;
+    }
     std::cout << "\033[1;33mIngrese el nombre:\033[0m ";
     std::cin.ignore();
     std::getline(std::cin, nombre);
     std::cout << "\033[1;33mIngrese la contraseña:\033[0m ";
-    std::getline(std::cin, password);
+    std::cin >> password;
     std::cout << "\033[1;33mIngrese el teléfono:\033[0m ";
     std::getline(std::cin, telefono);
 
@@ -700,9 +702,55 @@ int main()
                 }
                 break;
             case 4:
-                // Código para usar boleto
-                Utils::printError("Funcionalidad no implementada.");
+            {
+                std::time_t t = std::time(nullptr);
+                std::tm *tm = std::localtime(&t);
+                char buffer[11];
+                std::strftime(buffer, sizeof(buffer), "%Y-%m-%d", tm);
+                std::string fechaActual(buffer);
+
+                std::vector<Boleto> boletosValidos;
+                for (size_t i = 0; i < usuario.getCuenta().getBoletos().size(); ++i)
+                {
+                    const auto &boleto = usuario.getCuenta().getBoletos()[i];
+                    if (boleto.getFechaExpiracion() > fechaActual)
+                    {
+                        std::cout << "\033[1;33m" << i << ".\033[0m ";
+                        boleto.mostrar();
+                        boletosValidos.push_back(boleto);
+                    }
+                }
+                int boletoIndex;
+                std::cout << "\033[1;33mIngrese el índice del boleto a usar:\033[0m ";
+                std::cin >> boletoIndex;
+
+                if (boletoIndex < 0 || boletoIndex >= boletosValidos.size())
+                {
+                    Utils::printError("Índice de boleto inválido.");
+                }
+                else
+                {
+                    Boleto &boleto = boletosValidos[boletoIndex];
+                    boleto.setStatus(StatusBoleto::Activo);
+
+                    std::string sqlUpdateBoleto = "UPDATE BOLETOS SET STATUS = 'activo' WHERE ID = '" + boleto.getId() + "';";
+                    char *zErrMsg = 0;
+                    int rc = sqlite3_exec(DatabaseManager::getInstance().getDB(), sqlUpdateBoleto.c_str(), nullptr, 0, &zErrMsg);
+
+                    if (rc != SQLITE_OK)
+                    {
+                        Utils::printError("Error al actualizar el estado del boleto en la base de datos: " + std::string(zErrMsg));
+                        sqlite3_free(zErrMsg);
+                        throw std::runtime_error("Error al actualizar el estado del boleto en la base de datos.");
+                    }
+                    else
+                    {
+                        Utils::printSuccess("Boleto usado exitosamente.");
+                    }
+                }
                 break;
+            }
+            break;
             case 5:
                 usuario.getCuenta().mostrar();
                 break;

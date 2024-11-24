@@ -54,13 +54,26 @@ class TarjetaBancaria
 {
 public:
     TarjetaBancaria(const std::string &numero, const std::string &fechaExpiracion, const std::string &cvv)
-        : numero(numero), fechaExpiracion(fechaExpiracion), cvv(cvv) {}
+        : numero(numero), fechaExpiracion(fechaExpiracion), cvv(cvv)
+    {
+        uuid_t uuid;
+        uuid_generate(uuid);
+        char uuid_str[37];
+        uuid_unparse(uuid, uuid_str);
+        id = std::string(uuid_str);
+    }
 
     const std::string &getNumero() const { return numero; }
     const std::string &getFechaExpiracion() const { return fechaExpiracion; }
     const std::string &getCvv() const { return cvv; }
+    const std::string &getId() const { return id; }
+    void setId(const std::string &nuevoId) { id = nuevoId; }
+    void setNumero(const std::string &nuevoNumero) { numero = nuevoNumero; }
+    void setFechaExpiracion(const std::string &nuevaFechaExpiracion) { fechaExpiracion = nuevaFechaExpiracion; }
+    void setCvv(const std::string &nuevoCvv) { cvv = nuevoCvv; }
 
 private:
+    std::string id;
     std::string numero;
     std::string fechaExpiracion;
     std::string cvv;
@@ -70,8 +83,12 @@ class DatabaseManager
 {
 public:
     Usuario obtenerUsuario(const std::string &matricula);
+    Cuenta obtenerCuenta(const std::string &cuentaId);
+    std::vector<TarjetaBancaria> obtenerTarjetas(const std::string &cuentaId);
     Usuario crearUsuario();
     Cuenta crearCuenta(const std::string &usuario, int boletos, const std::string &tarjetas, double saldo);
+    TarjetaBancaria agregarTarjetaBancaria(TarjetaBancaria nuevaTarjeta, const std::string &cuentaId);
+
     static DatabaseManager &getInstance()
     {
         static DatabaseManager instance;
@@ -128,11 +145,7 @@ private:
 
         sql = "CREATE TABLE IF NOT EXISTS CUENTAS("
               "ID TEXT PRIMARY KEY NOT NULL,"
-              "USUARIO TEXT NOT NULL,"
-              "BOLETOS TEXT,"
-              "TARJETAS TEXT,"
-              "SALDO REAL NOT NULL,"
-              "FOREIGN KEY(USUARIO) REFERENCES USERS(MATRICULA));";
+              "SALDO REAL NOT NULL);";
 
         rc = sqlite3_exec(db, sql, callback, 0, &zErrMsg);
 
@@ -154,9 +167,11 @@ private:
         int rc;
 
         sql = "CREATE TABLE IF NOT EXISTS TARJETASBANCARIAS("
-              "ID INTEGER PRIMARY KEY AUTOINCREMENT,"
-              "NUMERO_TARJETA TEXT NOT NULL,"
-              "EXPIRACION TEXT NOT NULL);";
+              "ID TEXT PRIMARY KEY NOT NULL,"
+              "NUMERO TEXT NOT NULL,"
+              "EXPIRACION TEXT NOT NULL,"
+              "CUENTA TEXT NOT NULL,"
+              "FOREIGN KEY(CUENTA) REFERENCES CUENTAS(ID));";
 
         rc = sqlite3_exec(db, sql, callback, 0, &zErrMsg);
 
@@ -180,7 +195,9 @@ private:
         sql = "CREATE TABLE IF NOT EXISTS BOLETOS("
               "ID INTEGER PRIMARY KEY AUTOINCREMENT,"
               "EXPIRACION TEXT NOT NULL,"
-              "STATUS TEXT NOT NULL CHECK(STATUS IN ('activo', 'usado', 'nuevo')));";
+              "STATUS TEXT NOT NULL CHECK(STATUS IN ('activo', 'usado', 'nuevo')),"
+              "CUENTA TEXT NOT NULL,"
+              "FOREIGN KEY(CUENTA) REFERENCES CUENTAS(ID));";
 
         rc = sqlite3_exec(db, sql, callback, 0, &zErrMsg);
 
@@ -244,14 +261,56 @@ class Cuenta
 {
 public:
     Cuenta(double saldoInicial = 0.0)
-        : saldo(saldoInicial), cantidadBoletos(0), idBoletoActual(0) {}
+        : saldo(saldoInicial), idBoletoActual(0)
+    {
+        uuid_t uuid;
+        uuid_generate(uuid);
+        char uuid_str[37];
+        uuid_unparse(uuid, uuid_str);
+        id = std::string(uuid_str);
+    }
+
     Cuenta(double saldoInicial, int cantidadBoletos, int idBoletoActual)
-        : saldo(saldoInicial), cantidadBoletos(cantidadBoletos), idBoletoActual(idBoletoActual) {}
+        : saldo(saldoInicial), idBoletoActual(idBoletoActual) {}
 
     double getSaldo() const { return saldo; }
-    int getCantidadBoletos() const { return cantidadBoletos; }
     int getIdBoletoActual() const { return idBoletoActual; }
+    const std::vector<TarjetaBancaria> &getTarjetasBancarias() const { return tarjetasBancarias; }
+    const std::string &getId() const { return id; }
+    void setSaldo(double nuevoSaldo) { saldo = nuevoSaldo; }
+    void setIdBoletoActual(int nuevoId) { idBoletoActual = nuevoId; }
+    void setTarjetasBancarias(const std::vector<TarjetaBancaria> &nuevasTarjetas) { tarjetasBancarias = nuevasTarjetas; }
+    void setBoletos(const std::vector<Boleto> &nuevosBoletos) { boletos = nuevosBoletos; }
+    void setId(const std::string &nuevoId) { id = nuevoId; }
 
+    void mostrar() const
+    {
+        std::cout << "====================================================================\n"
+                  << "|                                                                  |\n"
+                  << "|                           \033[1;35mCuenta Info\033[0m                            |\n"
+                  << "|                                                                  |\n"
+                  << "====================================================================\n"
+                  << "\033[1;35mID de la Cuenta:\033[0m \033[1;33m" << id << "\033[0m\n"
+                  << "\033[1;35mSaldo:\033[0m \033[1;33m$" << saldo << "\033[0m\n"
+                  << "\033[1;35mID del Boleto Actual:\033[0m \033[1;33m" << idBoletoActual << "\033[0m\n"
+                  << "====================================================================\n";
+    }
+    void mostrarTarjetas() const
+    {
+        std::cout << "====================================================================\n"
+                  << "|                                                                  |\n"
+                  << "|                           \033[1;35mTarjetas Info\033[0m                          |\n"
+                  << "|                                                                  |\n"
+                  << "====================================================================\n";
+        for (const auto &tarjeta : tarjetasBancarias)
+        {
+            std::cout << "\033[1;35mID de la Tarjeta:\033[0m \033[1;33m" << tarjeta.getId() << "\033[0m\n"
+                      << "\033[1;35mNúmero:\033[0m \033[1;33m" << tarjeta.getNumero() << "\033[0m\n"
+                      << "\033[1;35mFecha de Expiración:\033[0m \033[1;33m" << tarjeta.getFechaExpiracion() << "\033[0m\n"
+                      << "--------------------------------------------------------------------\n";
+        }
+        std::cout << "====================================================================\n";
+    }
     void abonar(double cantidad)
     {
         if (cantidad > 0)
@@ -270,7 +329,6 @@ public:
         if (saldo >= Config::getInstance().getBoletoCosto())
         {
             saldo -= Config::getInstance().getBoletoCosto();
-            cantidadBoletos++;
             Utils::printSuccess("Boleto comprado exitosamente.");
         }
         else
@@ -281,22 +339,16 @@ public:
 
     void usarBoleto()
     {
-        if (cantidadBoletos > 0)
-        {
-            cantidadBoletos--;
-            Utils::printSuccess("Boleto usado exitosamente.");
-        }
-        else
-        {
-            Utils::printError("No tienes boletos disponibles para usar.");
-        }
+
+        Utils::printSuccess("Boleto usado exitosamente.");
     }
 
 private:
+    std::string id;
     double saldo;
-    int cantidadBoletos;
     int idBoletoActual;
     std::vector<TarjetaBancaria> tarjetasBancarias;
+    std::vector<Boleto> boletos;
 };
 
 class Usuario
@@ -339,6 +391,7 @@ public:
                 Utils::printSuccess("¡Inicio de sesión exitoso!");
                 nombre = usuarioFromDB.getNombre();
                 telefono = usuarioFromDB.getTelefono();
+                cuenta = usuarioFromDB.getCuenta();
                 return true;
             }
             else
@@ -384,7 +437,6 @@ Usuario DatabaseManager::obtenerUsuario(const std::string &matricula)
     std::string sqlSelect = "SELECT * FROM USERS WHERE MATRICULA = '" + matricula + "';";
     sqlite3_stmt *stmt;
     int rc = sqlite3_prepare_v2(getDB(), sqlSelect.c_str(), -1, &stmt, 0);
-
     if (rc != SQLITE_OK)
     {
         Utils::printError("Error al preparar la consulta: " + std::string(sqlite3_errmsg(db)));
@@ -392,17 +444,78 @@ Usuario DatabaseManager::obtenerUsuario(const std::string &matricula)
     }
 
     rc = sqlite3_step(stmt);
-    if (rc == SQLITE_ROW)
+    if (rc != SQLITE_ROW)
     {
-        std::string nombre = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1));
-        std::string password = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
-        std::string telefono = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
         sqlite3_finalize(stmt);
-        return Usuario(matricula, nombre, password, telefono, Cuenta());
+        throw std::runtime_error("Usuario no encontrado.");
     }
 
+    std::string nombre = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1));
+    std::string password = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
+    std::string telefono = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
+    std::string cuentaId = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 4));
     sqlite3_finalize(stmt);
-    throw std::runtime_error("Usuario no encontrado.");
+
+    Cuenta nuevaCuenta = obtenerCuenta(cuentaId);
+    std::cout << nuevaCuenta.getId() << std::endl;
+
+    return Usuario(matricula, nombre, password, telefono, nuevaCuenta);
+}
+
+Cuenta DatabaseManager::obtenerCuenta(const std::string &cuentaId)
+{
+    std::string sqlSelectCuenta = "SELECT * FROM CUENTAS WHERE ID = '" + cuentaId + "';";
+    sqlite3_stmt *stmtCuenta;
+    int rc = sqlite3_prepare_v2(getDB(), sqlSelectCuenta.c_str(), -1, &stmtCuenta, 0);
+    if (rc != SQLITE_OK)
+    {
+        Utils::printError("Error al preparar la consulta de cuenta: " + std::string(sqlite3_errmsg(db)));
+        throw std::runtime_error("Error al obtener la cuenta de la base de datos.");
+    }
+
+    rc = sqlite3_step(stmtCuenta);
+    if (rc != SQLITE_ROW)
+    {
+        sqlite3_finalize(stmtCuenta);
+        throw std::runtime_error("Cuenta no encontrada.");
+    }
+
+    std::string idCuenta = reinterpret_cast<const char *>(sqlite3_column_text(stmtCuenta, 0));
+    double saldo = sqlite3_column_double(stmtCuenta, 1);
+    sqlite3_finalize(stmtCuenta);
+    std::cout << cuentaId << std::endl;
+    std::cout << idCuenta << std::endl;
+    Cuenta nuevaCuenta(saldo);
+    nuevaCuenta.setId(idCuenta);
+    nuevaCuenta.setTarjetasBancarias(obtenerTarjetas(idCuenta));
+
+    return nuevaCuenta;
+}
+
+std::vector<TarjetaBancaria> DatabaseManager::obtenerTarjetas(const std::string &cuentaId)
+{
+    std::string sqlSelectTarjetas = "SELECT * FROM TARJETASBANCARIAS WHERE CUENTA = '" + cuentaId + "';";
+    sqlite3_stmt *stmtTarjetas;
+    int rc = sqlite3_prepare_v2(getDB(), sqlSelectTarjetas.c_str(), -1, &stmtTarjetas, 0);
+    if (rc != SQLITE_OK)
+    {
+        Utils::printError("Error al preparar la consulta de tarjetas: " + std::string(sqlite3_errmsg(db)));
+        throw std::runtime_error("Error al obtener las tarjetas de la base de datos.");
+    }
+
+    std::vector<TarjetaBancaria> tarjetas;
+    while ((rc = sqlite3_step(stmtTarjetas)) == SQLITE_ROW)
+    {
+        std::string idTarjeta = reinterpret_cast<const char *>(sqlite3_column_text(stmtTarjetas, 0));
+        std::string numero = reinterpret_cast<const char *>(sqlite3_column_text(stmtTarjetas, 1));
+        std::string expiracion = reinterpret_cast<const char *>(sqlite3_column_text(stmtTarjetas, 2));
+        TarjetaBancaria tarjeta(numero, expiracion, "");
+        tarjeta.setId(idTarjeta);
+        tarjetas.push_back(tarjeta);
+    }
+    sqlite3_finalize(stmtTarjetas);
+
+    return tarjetas;
 }
 
 Cuenta DatabaseManager::crearCuenta(const std::string &usuario, int boletos, const std::string &tarjetas, double saldo)
@@ -441,10 +554,24 @@ Usuario DatabaseManager::crearUsuario()
     std::cout << "\033[1;33mIngrese el teléfono:\033[0m ";
     std::getline(std::cin, telefono);
 
-    // TODO: CREAR CUENTA PARA INSERTARLA
+    Cuenta nuevaCuenta(0.0);
+    std::string id = nuevaCuenta.getId();
+    std::string sqlInsertCuenta = "INSERT INTO CUENTAS (ID, SALDO) VALUES ('" + id + "', " + std::to_string(nuevaCuenta.getSaldo()) + ");";
+    int rcCuenta = sqlite3_exec(getDB(), sqlInsertCuenta.c_str(), callback, 0, &zErrMsg);
 
-    std::string sqlInsert = "INSERT INTO USERS (MATRICULA, NAME, PASSWORD, TELEFONO, CUENTA) VALUES (" +
-                            matricula + ", '" + nombre + "', '" + password + "', '" + telefono + "', " + std::to_string(0) + ");";
+    if (rcCuenta != SQLITE_OK)
+    {
+        Utils::printError("SQL error: " + std::string(zErrMsg));
+        sqlite3_free(zErrMsg);
+        throw std::runtime_error("Error al crear la cuenta en la base de datos.");
+    }
+    else
+    {
+        Utils::printSuccess("Cuenta creada exitosamente");
+    }
+
+    std::string sqlInsert = "INSERT INTO USERS (MATRICULA, NAME, PASSWORD, TELEFONO, CUENTA) VALUES ('" +
+                            matricula + "', '" + nombre + "', '" + password + "', '" + telefono + "', '" + id + "');";
 
     int rc = sqlite3_exec(getDB(), sqlInsert.c_str(), callback, 0, &zErrMsg);
 
@@ -459,7 +586,27 @@ Usuario DatabaseManager::crearUsuario()
         Utils::printSuccess("Usuario creado exitosamente");
     }
 
-    return Usuario(matricula, nombre, password, telefono, Cuenta());
+    return Usuario(matricula, nombre, password, telefono, nuevaCuenta);
+}
+
+TarjetaBancaria DatabaseManager::agregarTarjetaBancaria(TarjetaBancaria nuevaTarjeta, const std::string &cuentaId)
+{
+    std::string sqlInsert = "INSERT INTO TARJETASBANCARIAS (ID, NUMERO, EXPIRACION, CUENTA) VALUES ('" +
+                            nuevaTarjeta.getId() + "', '" + nuevaTarjeta.getNumero() + "', '" + nuevaTarjeta.getFechaExpiracion() + "', '" + cuentaId + "');";
+    char *zErrMsg = 0;
+    int rc = sqlite3_exec(getDB(), sqlInsert.c_str(), callback, 0, &zErrMsg);
+
+    if (rc != SQLITE_OK)
+    {
+        Utils::printError("SQL error: " + std::string(zErrMsg));
+        sqlite3_free(zErrMsg);
+        throw std::runtime_error("Error al agregar la tarjeta bancaria en la base de datos.");
+    }
+    else
+    {
+        Utils::printSuccess("Tarjeta bancaria agregada exitosamente");
+        return nuevaTarjeta;
+    }
 }
 
 int main()
@@ -517,11 +664,11 @@ int main()
 
     while (true)
     {
-        std::vector<std::string> menuOptions = {"Abonar a mi cuenta", "Eliminar mi cuenta", "Comprar boleto", "Usar boleto", "Salir"};
+        std::vector<std::string> menuOptions = {"Abonar a mi cuenta", "Eliminar mi cuenta", "Comprar boleto", "Usar boleto", "Mostrar cuenta", "Agregar Tarjeta", "Mostrar tarjetas", "Salir"};
         Utils::printMenu(menuOptions);
         std::cin >> opcion;
 
-        if (opcion == 5)
+        if (opcion == 8)
         {
             Utils::printSuccess("Saliendo...");
             break;
@@ -532,7 +679,17 @@ int main()
             switch (opcion)
             {
             case 1:
-
+                if (usuario.getCuenta().getTarjetasBancarias().empty())
+                {
+                    Utils::printError("No tarjetas de crédito. No puede abonar.");
+                }
+                else
+                {
+                    double cantidad;
+                    std::cout << "\033[1;33mIngrese la cantidad a abonar:\033[0m ";
+                    std::cin >> cantidad;
+                    usuario.getCuenta().abonar(cantidad);
+                }
                 break;
             case 2:
                 usuario.eliminarCuenta();
@@ -560,6 +717,30 @@ int main()
                 // Código para usar boleto
                 Utils::printError("Funcionalidad no implementada.");
                 break;
+            case 5:
+                usuario.getCuenta().mostrar();
+                break;
+            case 6:
+            {
+                std::string numero, fechaExpiracion, cvv;
+                std::cout << "\033[1;33mIngrese el número de la tarjeta:\033[0m ";
+                std::cin >> numero;
+                std::cout << "\033[1;33mIngrese la fecha de expiración (MM/AA):\033[0m ";
+                std::cin >> fechaExpiracion;
+                std::cout << "\033[1;33mIngrese el CVV:\033[0m ";
+                std::cin >> cvv;
+                TarjetaBancaria nuevaTarjeta(numero, fechaExpiracion, cvv);
+                DatabaseManager::getInstance().agregarTarjetaBancaria(nuevaTarjeta, usuario.getCuenta().getId());
+                std::vector<TarjetaBancaria> tarjetas = usuario.getCuenta().getTarjetasBancarias();
+                tarjetas.push_back(nuevaTarjeta);
+                usuario.getCuenta().setTarjetasBancarias(tarjetas);
+                Utils::printSuccess("Tarjeta añadida exitosamente.");
+            }
+            break;
+            case 7:
+                usuario.getCuenta().mostrarTarjetas();
+
+                break;
             default:
                 Utils::printError("Opción inválida. Intente de nuevo!");
                 break;
@@ -570,5 +751,6 @@ int main()
             Utils::printError(e.what());
         }
     }
+
     return 0;
 }

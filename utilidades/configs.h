@@ -12,7 +12,7 @@ public:
     double getBoletoCosto() const { return 7.5; }
 
 private:
-    Config() : dbName("boletos.db") {}
+    Config() : dbName("busup-v2.db") {}
     ~Config() {}
 
     Config(const Config &) = delete;

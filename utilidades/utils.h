@@ -60,6 +60,14 @@ public:
         std::cout << "\033[0m";
     }
 
+    static std::string generateUUID()
+    {
+        uuid_t uuid;
+        uuid_generate(uuid);
+        char uuid_str[37];
+        uuid_unparse(uuid, uuid_str);
+        return std::string(uuid_str);
+    }
     static void printMenu(const std::vector<std::string> &items)
     {
         std::cout << "\033[1;34m";

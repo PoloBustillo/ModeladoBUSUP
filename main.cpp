@@ -2,11 +2,11 @@
 #include <vector>
 #include <string>
 #include <uuid/uuid.h>
-#include "sqlite3/sqlite3.h"
+#include "db/sqlite3.h"
 #include "utilities/utils.h"
 #include "utilities/configs.h"
 #include "utilities/enums.h"
-#include "sqlite3/databasemanger.h"
+#include "db/databasemanger.h"
 
 class Boleto
 {

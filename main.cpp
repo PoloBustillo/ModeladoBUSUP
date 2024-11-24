@@ -7,7 +7,8 @@
 #include "utilities/configs.h"
 #include "utilities/enums.h"
 #include "db/databasemanger.h"
-
+#include "models/tarjeta.h"
+#include "models/usuario.h"
 class Boleto
 {
 public:
@@ -16,7 +17,27 @@ public:
     {
         id = Utils::generateUUID();
     }
+    const std::string &getId() const { return id; }
+    const std::string &getFechaExpiracion() const { return fechaExpiracion; }
+    StatusBoleto getStatus() const { return status; }
 
+    void setId(const std::string &nuevoId) { id = nuevoId; }
+    void setFechaExpiracion(const std::string &nuevaFecha) { fechaExpiracion = nuevaFecha; }
+    void setStatus(StatusBoleto nuevoStatus) { status = nuevoStatus; }
+    std::string statusToString() const
+    {
+        switch (status)
+        {
+        case StatusBoleto::Activo:
+            return "Activo";
+        case StatusBoleto::Nuevo:
+            return "Nuevo";
+        case StatusBoleto::Usado:
+            return "Usado";
+        default:
+            return "Desconocido";
+        }
+    }
     void mostrar() const
     {
         std::cout << "====================================================================\n"
@@ -34,43 +55,6 @@ private:
     std::string id;
     std::string fechaExpiracion;
     StatusBoleto status;
-
-    std::string statusToString() const
-    {
-        switch (status)
-        {
-        case StatusBoleto::Activo:
-            return "Activo";
-        case StatusBoleto::Nuevo:
-            return "Nuevo";
-        case StatusBoleto::Usado:
-            return "Usado";
-        default:
-            return "Desconocido";
-        }
-    }
-};
-
-class TarjetaBancaria
-{
-public:
-    TarjetaBancaria(const std::string &numero, const std::string &fechaExpiracion, const std::string &cvv)
-        : numero(numero), fechaExpiracion(fechaExpiracion), cvv(cvv)
-    {
-        id = Utils::generateUUID();
-    }
-
-    const std::string &getNumero() const { return numero; }
-    const std::string &getFechaExpiracion() const { return fechaExpiracion; }
-    const std::string &getCvv() const { return cvv; }
-    const std::string &getId() const { return id; }
-    void setId(const std::string &nuevoId) { id = nuevoId; }
-
-private:
-    std::string id;
-    std::string numero;
-    std::string fechaExpiracion;
-    std::string cvv;
 };
 
 class Cuenta
@@ -85,6 +69,7 @@ public:
     double getSaldo() const { return saldo; }
     int getIdBoletoActual() const { return idBoletoActual; }
     const std::vector<TarjetaBancaria> &getTarjetasBancarias() const { return tarjetasBancarias; }
+    const std::vector<Boleto> &getBoletos() const { return boletos; }
     const std::string &getId() const { return id; }
 
     void setSaldo(double nuevoSaldo) { saldo = nuevoSaldo; }
@@ -122,7 +107,22 @@ public:
         }
         std::cout << "====================================================================\n";
     }
-
+    void mostrarBoletos() const
+    {
+        std::cout << "====================================================================\n"
+                  << "|                                                                  |\n"
+                  << "|                           \033[1;35mBoletos Info\033[0m                           |\n"
+                  << "|                                                                  |\n"
+                  << "====================================================================\n";
+        for (const auto &boleto : boletos)
+        {
+            std::cout << "\033[1;35mID del Boleto:\033[0m \033[1;33m" << boleto.getId() << "\033[0m\n"
+                      << "\033[1;35mFecha de Expiración:\033[0m \033[1;33m" << boleto.getFechaExpiracion() << "\033[0m\n"
+                      << "\033[1;35mEstado:\033[0m \033[1;33m" << boleto.statusToString() << "\033[0m\n";
+            std::cout << "--------------------------------------------------------------------\n";
+        }
+        std::cout << "====================================================================\n";
+    }
     void abonar(double cantidad)
     {
         if (cantidad > 0)
@@ -136,16 +136,54 @@ public:
         }
     }
 
-    void comprarBoleto()
+    Boleto comprarBoleto()
     {
         if (saldo >= Config::getInstance().getBoletoCosto())
         {
             saldo -= Config::getInstance().getBoletoCosto();
-            Utils::printSuccess("Boleto comprado exitosamente.");
+            std::time_t t = std::time(nullptr);
+            std::tm *tm = std::localtime(&t);
+            tm->tm_mday += 10;
+            std::mktime(tm);
+            char buffer[11];
+            std::strftime(buffer, sizeof(buffer), "%Y-%m-%d", tm);
+            std::string fechaExpiracion(buffer);
+            Boleto nuevoBoleto(fechaExpiracion, StatusBoleto::Nuevo);
+            boletos.push_back(nuevoBoleto);
+
+            // Insertar el boleto en la base de datos
+            std::string sqlInsertBoleto = "INSERT INTO BOLETOS (ID, EXPIRACION, STATUS, CUENTA) VALUES ('" +
+                                          nuevoBoleto.getId() + "', '" + fechaExpiracion + "', 'nuevo', '" + id + "');";
+            char *zErrMsg = 0;
+            int rc = sqlite3_exec(DatabaseManager::getInstance().getDB(), sqlInsertBoleto.c_str(), nullptr, 0, &zErrMsg);
+
+            if (rc != SQLITE_OK)
+            {
+                Utils::printError("Error al insertar el boleto en la base de datos: " + std::string(zErrMsg));
+                sqlite3_free(zErrMsg);
+                throw std::runtime_error("Error al insertar el boleto en la base de datos.");
+            }
+            else
+            {
+                // Actualizar el saldo en la base de datos
+                std::string sqlUpdateSaldo = "UPDATE CUENTAS SET SALDO = " + std::to_string(saldo) + " WHERE ID = '" + id + "';";
+                rc = sqlite3_exec(DatabaseManager::getInstance().getDB(), sqlUpdateSaldo.c_str(), nullptr, 0, &zErrMsg);
+
+                if (rc != SQLITE_OK)
+                {
+                    Utils::printError("Error al actualizar el saldo en la base de datos: " + std::string(zErrMsg));
+                    sqlite3_free(zErrMsg);
+                    throw std::runtime_error("Error al actualizar el saldo en la base de datos.");
+                }
+                Utils::printSuccess("Boleto insertado en la BD.");
+                Utils::printSuccess("Boleto comprado exitosamente.");
+                return nuevoBoleto;
+            }
         }
         else
         {
             Utils::printError("Saldo insuficiente para comprar un boleto.");
+            throw std::runtime_error("Error al insertar el boleto en la base de datos.");
         }
     }
 
@@ -155,44 +193,6 @@ private:
     int idBoletoActual;
     std::vector<TarjetaBancaria> tarjetasBancarias;
     std::vector<Boleto> boletos;
-};
-
-class Transaccion
-{
-public:
-    Transaccion(double monto, StatusTransaccion status, const std::string &usuario, const std::string &tarjetaId)
-        : monto(monto), status(status), usuario(usuario), tarjetaId(tarjetaId)
-    {
-        id = Utils::generateUUID();
-    }
-
-    const std::string &getId() const { return id; }
-    double getMonto() const { return monto; }
-    StatusTransaccion getStatus() const { return status; }
-    const std::string &getUsuario() const { return usuario; }
-    const std::string &getTarjetaId() const { return tarjetaId; }
-
-    void mostrar() const
-    {
-        std::cout << "====================================================================\n"
-                  << "|                                                                  |\n"
-                  << "|                       \033[1;35mTransacción Info\033[0m                            |\n"
-                  << "|                                                                  |\n"
-                  << "====================================================================\n"
-                  << "\033[1;35mID de la Transa1cción:\033[0m \033[1;33m" << id << "\033[0m\n"
-                  << "\033[1;35mMonto:\033[0m \033[1;33m$" << monto << "\033[0m\n"
-                  << "\033[1;35mEstado:\033[0m \033[1;33m" << (status == StatusTransaccion::Abono ? "Abono" : "Compra") << "\033[0m\n"
-                  << "\033[1;35mUsuario:\033[0m \033[1;33m" << usuario << "\033[0m\n"
-                  << "\033[1;35mID de la Tarjeta:\033[0m \033[1;33m" << tarjetaId << "\033[0m\n"
-                  << "====================================================================\n";
-    }
-
-private:
-    std::string id;
-    double monto;
-    StatusTransaccion status;
-    std::string usuario;
-    std::string tarjetaId;
 };
 
 class Usuario
@@ -275,6 +275,43 @@ private:
     std::string telefono;
     Cuenta cuenta;
 };
+class Transaccion
+{
+public:
+    Transaccion(double monto, StatusTransaccion status, const std::string &usuario, const std::string &tarjetaId)
+        : monto(monto), status(status), usuario(usuario), tarjetaId(tarjetaId)
+    {
+        id = Utils::generateUUID();
+    }
+
+    const std::string &getId() const { return id; }
+    double getMonto() const { return monto; }
+    StatusTransaccion getStatus() const { return status; }
+    const std::string &getUsuario() const { return usuario; }
+    const std::string &getTarjetaId() const { return tarjetaId; }
+
+    void mostrar() const
+    {
+        std::cout << "====================================================================\n"
+                  << "|                                                                  |\n"
+                  << "|                       \033[1;35mTransacción Info\033[0m                            |\n"
+                  << "|                                                                  |\n"
+                  << "====================================================================\n"
+                  << "\033[1;35mID de la Transa1cción:\033[0m \033[1;33m" << id << "\033[0m\n"
+                  << "\033[1;35mMonto:\033[0m \033[1;33m$" << monto << "\033[0m\n"
+                  << "\033[1;35mEstado:\033[0m \033[1;33m" << (status == StatusTransaccion::Abono ? "Abono" : "Compra") << "\033[0m\n"
+                  << "\033[1;35mUsuario:\033[0m \033[1;33m" << usuario << "\033[0m\n"
+                  << "\033[1;35mID de la Tarjeta:\033[0m \033[1;33m" << tarjetaId << "\033[0m\n"
+                  << "====================================================================\n";
+    }
+
+private:
+    std::string id;
+    double monto;
+    StatusTransaccion status;
+    std::string usuario;
+    std::string tarjetaId;
+};
 
 Usuario DatabaseManager::getUser(const std::string &matricula)
 {
@@ -332,10 +369,37 @@ Cuenta DatabaseManager::getAccount(const std::string &cuentaId)
     Cuenta nuevaCuenta(saldo);
     nuevaCuenta.setId(idCuenta);
     nuevaCuenta.setTarjetasBancarias(getCards(idCuenta));
+    nuevaCuenta.setBoletos(getBoletos(idCuenta));
 
     return nuevaCuenta;
 }
+std::vector<Boleto> DatabaseManager::getBoletos(const std::string &cuentaId)
+{
+    std::string sqlSelectBoletos = "SELECT * FROM BOLETOS WHERE CUENTA = '" + cuentaId + "';";
+    sqlite3_stmt *stmtBoletos;
+    int rc = sqlite3_prepare_v2(getDB(), sqlSelectBoletos.c_str(), -1, &stmtBoletos, 0);
+    if (rc != SQLITE_OK)
+    {
+        Utils::printError("Error al preparar la consulta de boletos: " + std::string(sqlite3_errmsg(db)));
+        throw std::runtime_error("Error al obtener los boletos de la base de datos.");
+    }
 
+    std::vector<Boleto> boletos;
+    while ((rc = sqlite3_step(stmtBoletos)) == SQLITE_ROW)
+    {
+        std::string idBoleto = reinterpret_cast<const char *>(sqlite3_column_text(stmtBoletos, 0));
+        std::string expiracion = reinterpret_cast<const char *>(sqlite3_column_text(stmtBoletos, 1));
+        std::string statusStr = reinterpret_cast<const char *>(sqlite3_column_text(stmtBoletos, 2));
+        StatusBoleto status = (statusStr == "nuevo") ? StatusBoleto::Nuevo : (statusStr == "activo") ? StatusBoleto::Activo
+                                                                                                     : StatusBoleto::Usado;
+        Boleto boleto(expiracion, status);
+        boleto.setId(idBoleto);
+        boletos.push_back(boleto);
+    }
+    sqlite3_finalize(stmtBoletos);
+
+    return boletos;
+}
 std::vector<TarjetaBancaria> DatabaseManager::getCards(const std::string &cuentaId)
 {
     std::string sqlSelectTarjetas = "SELECT * FROM TARJETASBANCARIAS WHERE CUENTA = '" + cuentaId + "';";
@@ -509,9 +573,8 @@ int main()
         if (opcion == 3)
         {
             Utils::printSuccess("Saliendo...");
-            break;
+            exit(0);
         }
-
         try
         {
             switch (opcion)
@@ -547,14 +610,14 @@ int main()
 
     while (true)
     {
-        std::vector<std::string> menuOptions = {"Abonar a mi cuenta", "Eliminar mi cuenta", "Comprar boleto", "Usar boleto", "Mostrar cuenta", "Agregar Tarjeta", "Mostrar tarjetas", "Mostrar Transacciones", "Salir"};
+        std::vector<std::string> menuOptions = {"Abonar a mi cuenta", "Eliminar mi cuenta", "Comprar boleto", "Usar boleto", "Mostrar cuenta", "Agregar Tarjeta", "Mostrar tarjetas", "Mostrar Transacciones", "Mostrar Boletos", "Salir"};
         Utils::printMenu(menuOptions);
         std::cin >> opcion;
 
-        if (opcion == 9)
+        if (opcion == 10)
         {
             Utils::printSuccess("Saliendo...");
-            break;
+            exit(0);
         }
 
         try
@@ -591,22 +654,53 @@ int main()
                 usuario.eliminarCuenta();
                 break;
             case 3:
-                if (usuario.getCuenta().getSaldo() >= Config::getInstance().getBoletoCosto())
+                std::cout << "\033[1;33mSeleccione el método de pago:\033[0m\n";
+                std::cout << "1. Saldo\n";
+                std::cout << "2. Tarjeta\n";
+                int metodoPago;
+                std::cin >> metodoPago;
+
+                if (metodoPago == 1)
                 {
-                    usuario.getCuenta().comprarBoleto();
-                    std::time_t t = std::time(nullptr);
-                    std::tm *tm = std::localtime(&t);
-                    tm->tm_mday += 10;
-                    std::mktime(tm);
-                    char buffer[11];
-                    std::strftime(buffer, sizeof(buffer), "%Y-%m-%d", tm);
-                    std::string fechaExpiracion(buffer);
-                    Boleto boleto(fechaExpiracion, StatusBoleto::Nuevo);
-                    boleto.mostrar();
+                    if (usuario.getCuenta().getSaldo() >= Config::getInstance().getBoletoCosto())
+                    {
+                        Boleto boleto = usuario.getCuenta().comprarBoleto();
+                        boleto.mostrar();
+                    }
+                    else
+                    {
+                        Utils::printError("Saldo insuficiente para comprar un boleto.");
+                    }
+                }
+                else if (metodoPago == 2)
+                {
+                    if (usuario.getCuenta().getTarjetasBancarias().empty())
+                    {
+                        Utils::printError("No hay tarjetas de crédito. No puede comprar boleto.");
+                    }
+                    else
+                    {
+                        std::cout << "\033[1;33mSeleccione la tarjeta para comprar boleto:\033[0m\n";
+                        usuario.getCuenta().mostrarTarjetas();
+                        int tarjetaIndex;
+                        std::cout << "\033[1;33mIngrese el índice de la tarjeta:\033[0m ";
+                        std::cin >> tarjetaIndex;
+                        if (tarjetaIndex < 0 || tarjetaIndex >= usuario.getCuenta().getTarjetasBancarias().size())
+                        {
+                            Utils::printError("Índice de tarjeta inválido.");
+                        }
+                        else
+                        {
+                            Transaccion transaccion(Config::getInstance().getBoletoCosto(), StatusTransaccion::Compra, usuario.getMatricula(), usuario.getCuenta().getTarjetasBancarias()[tarjetaIndex].getId());
+                            DatabaseManager::getInstance().registerTransaction(transaccion);
+                            Boleto boleto = usuario.getCuenta().comprarBoleto();
+                            boleto.mostrar();
+                        }
+                    }
                 }
                 else
                 {
-                    Utils::printError("Saldo insuficiente para comprar un boleto.");
+                    Utils::printError("Método de pago inválido.");
                 }
                 break;
             case 4:
@@ -666,6 +760,9 @@ int main()
                 }
             }
             break;
+            case 9:
+                usuario.getCuenta().mostrarBoletos();
+                break;
             default:
                 Utils::printError("Opción inválida. Intente de nuevo!");
                 break;

@@ -8,6 +8,7 @@ class Usuario;
 class Cuenta;
 class TarjetaBancaria;
 class Transaccion;
+class Boleto;
 
 class DatabaseManager
 {
@@ -27,6 +28,7 @@ public:
     Cuenta getAccount(const std::string &accountId);
     void registerTransaction(Transaccion transaction);
     std::vector<TarjetaBancaria> getCards(const std::string &accountId);
+    std::vector<Boleto> getBoletos(const std::string &accountId);
     Usuario createUser();
     Cuenta createAccount(const std::string &user, int tickets, const std::string &cards, double balance);
     TarjetaBancaria addBankCard(TarjetaBancaria newCard, const std::string &accountId);
@@ -77,7 +79,7 @@ private:
                     "Error creando tabla TARJETASBANCARIAS.");
 
         createTable("CREATE TABLE IF NOT EXISTS BOLETOS("
-                    "ID INTEGER PRIMARY KEY AUTOINCREMENT,"
+                    "ID TEXT PRIMARY KEY NOT NULL,"
                     "EXPIRACION TEXT NOT NULL,"
                     "STATUS TEXT NOT NULL CHECK(STATUS IN ('activo', 'usado', 'nuevo')),"
                     "CUENTA TEXT NOT NULL,"

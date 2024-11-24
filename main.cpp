@@ -3,9 +3,9 @@
 #include <string>
 #include <uuid/uuid.h>
 #include "sqlite3/sqlite3.h"
-#include "utilidades/utils.h"
-#include "utilidades/configs.h"
-#include "utilidades/enums.h"
+#include "utilities/utils.h"
+#include "utilities/configs.h"
+#include "utilities/enums.h"
 #include "sqlite3/databasemanger.h"
 
 class Boleto
@@ -176,13 +176,13 @@ public:
     {
         std::cout << "====================================================================\n"
                   << "|                                                                  |\n"
-                  << "|                       \033[1;35mTransacción Info\033[0m                        |\n"
+                  << "|                       \033[1;35mTransacción Info\033[0m                            |\n"
                   << "|                                                                  |\n"
                   << "====================================================================\n"
-                  << "\033[1;35mID de la Transacción:\033[0m \033[1;33m" << id << "\033[0m\n"
+                  << "\033[1;35mID de la Transa1cción:\033[0m \033[1;33m" << id << "\033[0m\n"
                   << "\033[1;35mMonto:\033[0m \033[1;33m$" << monto << "\033[0m\n"
                   << "\033[1;35mEstado:\033[0m \033[1;33m" << (status == StatusTransaccion::Abono ? "Abono" : "Compra") << "\033[0m\n"
-                  << "\033[1;35mUsuario:\033[0m \033[1;33m" << usuario << "\033{0m\n"
+                  << "\033[1;35mUsuario:\033[0m \033[1;33m" << usuario << "\033[0m\n"
                   << "\033[1;35mID de la Tarjeta:\033[0m \033[1;33m" << tarjetaId << "\033[0m\n"
                   << "====================================================================\n";
     }
@@ -453,8 +453,43 @@ TarjetaBancaria DatabaseManager::addBankCard(TarjetaBancaria nuevaTarjeta, const
     }
 }
 
-void DatabaseManager::registerTransaction(Transaccion)
+void DatabaseManager::registerTransaction(Transaccion transaccion)
 {
+    std::string sqlInsert = "INSERT INTO TRANSACCION (ID, MONTO, STATUS, USUARIO, TARJETAID) VALUES ('" +
+                            transaccion.getId() + "', " + std::to_string(transaccion.getMonto()) + ", '" +
+                            (transaccion.getStatus() == StatusTransaccion::Abono ? "abono" : "compra") + "', '" +
+                            transaccion.getUsuario() + "', '" + transaccion.getTarjetaId() + "');";
+    char *zErrMsg = 0;
+    int rc = sqlite3_exec(getDB(), sqlInsert.c_str(), callback, 0, &zErrMsg);
+
+    if (rc != SQLITE_OK)
+    {
+        Utils::printError("SQL error: " + std::string(zErrMsg));
+        sqlite3_free(zErrMsg);
+        throw std::runtime_error("Error al registrar la transacción en la base de datos.");
+    }
+    else
+    {
+        Utils::printSuccess("Transacción registrada exitosamente");
+    }
+
+    if (transaccion.getStatus() == StatusTransaccion::Abono)
+    {
+        std::string sqlUpdate = "UPDATE CUENTAS SET SALDO = SALDO + " + std::to_string(transaccion.getMonto()) +
+                                " WHERE ID = (SELECT CUENTA FROM USERS WHERE MATRICULA = '" + transaccion.getUsuario() + "');";
+        rc = sqlite3_exec(getDB(), sqlUpdate.c_str(), callback, 0, &zErrMsg);
+
+        if (rc != SQLITE_OK)
+        {
+            Utils::printError("SQL error: " + std::string(zErrMsg));
+            sqlite3_free(zErrMsg);
+            throw std::runtime_error("Error al actualizar el saldo de la cuenta en la base de datos.");
+        }
+        else
+        {
+            Utils::printSuccess("Saldo de la cuenta actualizado exitosamente");
+        }
+    }
 }
 
 int main()
@@ -512,11 +547,11 @@ int main()
 
     while (true)
     {
-        std::vector<std::string> menuOptions = {"Abonar a mi cuenta", "Eliminar mi cuenta", "Comprar boleto", "Usar boleto", "Mostrar cuenta", "Agregar Tarjeta", "Mostrar tarjetas", "Salir"};
+        std::vector<std::string> menuOptions = {"Abonar a mi cuenta", "Eliminar mi cuenta", "Comprar boleto", "Usar boleto", "Mostrar cuenta", "Agregar Tarjeta", "Mostrar tarjetas", "Mostrar Transacciones", "Salir"};
         Utils::printMenu(menuOptions);
         std::cin >> opcion;
 
-        if (opcion == 8)
+        if (opcion == 9)
         {
             Utils::printSuccess("Saliendo...");
             break;
@@ -601,6 +636,36 @@ int main()
             case 7:
                 usuario.getCuenta().mostrarTarjetas();
                 break;
+            case 8:
+            {
+                std::string sqlSelectTransacciones = "SELECT * FROM TRANSACCION WHERE USUARIO = '" + usuario.getMatricula() + "';";
+                sqlite3_stmt *stmtTransacciones;
+                int rc = sqlite3_prepare_v2(DatabaseManager::getInstance().getDB(), sqlSelectTransacciones.c_str(), -1, &stmtTransacciones, 0);
+                if (rc != SQLITE_OK)
+                {
+                    Utils::printError("Error al preparar la consulta de transacciones: " + std::string(sqlite3_errmsg(DatabaseManager::getInstance().getDB())));
+                    throw std::runtime_error("Error al obtener las transacciones de la base de datos.");
+                }
+
+                std::vector<Transaccion> transacciones;
+                while ((rc = sqlite3_step(stmtTransacciones)) == SQLITE_ROW)
+                {
+                    std::string idTransaccion = reinterpret_cast<const char *>(sqlite3_column_text(stmtTransacciones, 0));
+                    double monto = sqlite3_column_double(stmtTransacciones, 1);
+                    std::string statusStr = reinterpret_cast<const char *>(sqlite3_column_text(stmtTransacciones, 2));
+                    StatusTransaccion status = (statusStr == "abono") ? StatusTransaccion::Abono : StatusTransaccion::Compra;
+                    std::string usuarioTransaccion = reinterpret_cast<const char *>(sqlite3_column_text(stmtTransacciones, 3));
+                    std::string tarjetaId = reinterpret_cast<const char *>(sqlite3_column_text(stmtTransacciones, 4));
+                    transacciones.emplace_back(monto, status, usuarioTransaccion, tarjetaId);
+                }
+                sqlite3_finalize(stmtTransacciones);
+
+                for (const auto &transaccion : transacciones)
+                {
+                    transaccion.mostrar();
+                }
+            }
+            break;
             default:
                 Utils::printError("Opción inválida. Intente de nuevo!");
                 break;

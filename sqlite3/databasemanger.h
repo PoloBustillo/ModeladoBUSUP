@@ -96,7 +96,7 @@ private:
         createTable("CREATE TABLE IF NOT EXISTS TRANSACCION("
                     "ID TEXT PRIMARY KEY NOT NULL,"
                     "MONTO REAL NOT NULL,"
-                    "STATUS TEXT NOT NULL CHECK(STATUS IN ('pendiente', 'completada', 'fallida')),"
+                    "STATUS TEXT NOT NULL CHECK(STATUS IN ('abono', 'compra')),"
                     "USUARIO TEXT NOT NULL,"
                     "TARJETAID TEXT NOT NULL,"
                     "FOREIGN KEY(USUARIO) REFERENCES USERS(MATRICULA),"

@@ -3,135 +3,67 @@
 #include <string>
 #include "sqlite3/sqlite3.h"
 #include "colormode.h"
-#include <chrono>
-#include <thread>
-#include <sys/ioctl.h>
-#include <unistd.h>
+#include "utils.h"
+#include "configs.h"
+#include <uuid/uuid.h>
 
 class Usuario;
 class Cuenta;
 
-class Utils
+enum class StatusBoleto
 {
-public:
-    static void mostrarBarraDeCarga(int duracionSegundos)
-    {
-        int anchoBarra = 30;
-        std::cout << Utils::centerText("Inicia la base de datos...!");
-        std::cout << "\033[5;34m"; // Blink text
-        for (int i = 0; i <= anchoBarra; ++i)
-        {
-            std::cout << "\r["; // Shifted right to be centered
-            for (int j = 0; j < i; ++j)
-            {
-                std::cout << (j % 7 == 0 ? "🚀" : j % 5 == 0 ? "🛸"
-                                                             : "✨");
-            }
-            for (int j = i; j < anchoBarra; ++j)
-            {
-                std::cout << " ";
-            }
-            std::cout << "] " << (i * 100) / anchoBarra << "% " << (i == anchoBarra ? "🎉" : "👀");
-            std::cout.flush();
-            std::this_thread::sleep_for(std::chrono::milliseconds(duracionSegundos * 1000 / anchoBarra));
-        }
-        std::cout << "\n\n\033[0m" << std::endl; // Reset
-    }
-
-    static void printError(const std::string &msg)
-    {
-        std::cout << "\033[1;31m";
-        std::cout << Utils::centerText("=====================================================\n");
-        std::cout << Utils::centerText("|                                                   |\n");
-        std::cout << Utils::centerText("\033[1;41;97m💩 " + msg) << "\033[0m" << "\n";
-        std::cout << "\033[1;31m";
-        std::cout << Utils::centerText("|                                                   |\n");
-        std::cout << Utils::centerText("=====================================================\n");
-        std::cout << "\033[0m";
-    }
-
-    static void printSuccess(const std::string &msg)
-    {
-        std::cout << "\033[1;32m"; // Bold Green
-        std::cout << Utils::centerText("=====================================================\n");
-        std::cout << Utils::centerText("|                                                   |\n");
-        std::cout << Utils::centerText("\033[1;42;97m✅ " + msg) << "\033[0m" << "\n";
-        std::cout << "\033[1;32m"; // Bold, Green background, White text
-        std::cout << Utils::centerText("|                                                   |\n");
-        std::cout << Utils::centerText("=====================================================\n");
-        std::cout << "\033[0m"; // Reset
-    }
-
-    static void printMenu(const std::vector<std::string> &items)
-    {
-        std::cout << "\033[1;34m"; // Bold Blue
-        std::cout << Utils::centerText("=====================================================\n");
-        std::cout << Utils::centerText("|                                                   |\n");
-        std::cout << Utils::centerText("          \033[1;44;97mMENÚ\033[0m            \n");
-        std::cout << "\033[1;34m";
-        std::cout << Utils::centerText("|                                                   |\n");
-        std::cout << Utils::centerText("=====================================================\n");
-        // Reset
-        for (size_t i = 0; i < items.size(); ++i)
-        {
-            std::cout << Utils::centerText("\033[1;34m" + std::to_string(i + 1) + ". 🔸" + items[i] + "🔸\n");
-        }
-        std::cout << Utils::centerText("=====================================================");
-        std::cout << "\033[0m"
-                  << "\n\nIngrese su opción: ";
-    }
-
-    static std::string centerText(const std::string &text)
-    {
-        int width = 120;
-        struct winsize w;
-        ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-        if (w.ws_col)
-        {
-            width = w.ws_col;
-        }
-        int printableLength = 0;
-        bool escapeSequence = false;
-        for (size_t i = 0; i < text.size(); ++i)
-        {
-            if (text[i] == '\033')
-            {
-                escapeSequence = true;
-            }
-            else if (escapeSequence && text[i] == 'm')
-            {
-                escapeSequence = false;
-            }
-            else if (!escapeSequence)
-            {
-                ++printableLength;
-            }
-        }
-        int spaces = (width - printableLength) / 2;
-        return std::string(spaces, ' ') + text;
-    }
+    Activo,
+    Nuevo,
+    Usado
 };
-
-class Config
+class Boleto
 {
 public:
-    static Config &getInstance()
+    Boleto(const std::string &fechaExpiracion, StatusBoleto status)
+        : fechaExpiracion(fechaExpiracion), status(status)
     {
-        static Config instance;
-        return instance;
+        uuid_t uuid;
+        uuid_generate(uuid);
+        char uuid_str[37];
+        uuid_unparse(uuid, uuid_str);
+        id = std::string(uuid_str);
     }
 
-    const std::string &getDbName() const { return dbName; }
-    void setDbName(const std::string &name) { dbName = name; }
+    void mostrar() const
+    {
+        std::cout << "====================================================================\n"
+                  << "|                                                                  |\n"
+                  << "|                           \033[1;35mBoleto Info\033[0m                            |\n"
+                  << "|                                                                  |\n"
+                  << "====================================================================\n"
+                  << "\033[1;35mID del Boleto:\033[0m \033[1;33m" << id << "\033[0m\n"
+                  << "\033[1;35mFecha de Expiración:\033[0m \033[1;33m" << fechaExpiracion << "\033[0m\n"
+                  << "\033[1;35mEstado:\033[0m \033[1;33m" << (status == StatusBoleto::Activo ? "Activo" : status == StatusBoleto::Nuevo ? "Nuevo"
+                                                                                                                                         : "Usado")
+                  << "\033[0m\n"
+                  << "====================================================================\n";
+    }
 
 private:
-    Config() : dbName("boletos.db") {}
-    ~Config() {}
+    std::string id;
+    std::string fechaExpiracion;
+    StatusBoleto status;
+};
 
-    Config(const Config &) = delete;
-    Config &operator=(const Config &) = delete;
+class TarjetaBancaria
+{
+public:
+    TarjetaBancaria(const std::string &numero, const std::string &fechaExpiracion, const std::string &cvv)
+        : numero(numero), fechaExpiracion(fechaExpiracion), cvv(cvv) {}
 
-    std::string dbName;
+    const std::string &getNumero() const { return numero; }
+    const std::string &getFechaExpiracion() const { return fechaExpiracion; }
+    const std::string &getCvv() const { return cvv; }
+
+private:
+    std::string numero;
+    std::string fechaExpiracion;
+    std::string cvv;
 };
 
 class DatabaseManager
@@ -195,9 +127,9 @@ private:
         int rc;
 
         sql = "CREATE TABLE IF NOT EXISTS CUENTAS("
-              "ID INTEGER PRIMARY KEY AUTOINCREMENT,"
+              "ID TEXT PRIMARY KEY NOT NULL,"
               "USUARIO TEXT NOT NULL,"
-              "BOLETOS INTEGER NOT NULL,"
+              "BOLETOS TEXT,"
               "TARJETAS TEXT,"
               "SALDO REAL NOT NULL,"
               "FOREIGN KEY(USUARIO) REFERENCES USERS(MATRICULA));";
@@ -270,11 +202,12 @@ private:
         int rc;
 
         sql = "CREATE TABLE IF NOT EXISTS USERS("
-              "MATRICULA INT PRIMARY        KEY      NOT NULL,"
-              "NAME                         TEXT     NOT NULL,"
-              "PASSWORD                     TEXT     NOT NULL,"
-              "TELEFONO                     TEXT     NOT NULL,"
-              "SALDO                        REAL     NOT NULL);";
+              "MATRICULA TEXT PRIMARY KEY NOT NULL,"
+              "NAME TEXT NOT NULL,"
+              "PASSWORD TEXT NOT NULL,"
+              "TELEFONO TEXT NOT NULL,"
+              "CUENTA TEXT NOT NULL,"
+              "FOREIGN KEY(CUENTA) REFERENCES CUENTAS(ID));";
 
         rc = sqlite3_exec(db, sql, callback, 0, &zErrMsg);
 
@@ -312,8 +245,8 @@ class Cuenta
 public:
     Cuenta(double saldoInicial = 0.0)
         : saldo(saldoInicial), cantidadBoletos(0), idBoletoActual(0) {}
-    Cuenta(double saldoInicial, int cantidadBoletos, int idBoletoActual, const std::string &numeroTarjeta, const std::string &fechaExpiracion, const std::string &cvv, const std::string &cuentaPaypal, const std::string &referenciaPago)
-        : saldo(saldoInicial), cantidadBoletos(cantidadBoletos), idBoletoActual(idBoletoActual), tarjetaBancaria({numeroTarjeta, fechaExpiracion, cvv}), cuentaPaypal(cuentaPaypal), referenciaPago(referenciaPago) {}
+    Cuenta(double saldoInicial, int cantidadBoletos, int idBoletoActual)
+        : saldo(saldoInicial), cantidadBoletos(cantidadBoletos), idBoletoActual(idBoletoActual) {}
 
     double getSaldo() const { return saldo; }
     int getCantidadBoletos() const { return cantidadBoletos; }
@@ -334,11 +267,10 @@ public:
 
     void comprarBoleto()
     {
-        if (saldo >= 50) // Suponiendo que cada boleto cuesta 50
+        if (saldo >= Config::getInstance().getBoletoCosto())
         {
-            saldo -= 50;
+            saldo -= Config::getInstance().getBoletoCosto();
             cantidadBoletos++;
-            idBoletoActual++;
             Utils::printSuccess("Boleto comprado exitosamente.");
         }
         else
@@ -360,48 +292,24 @@ public:
         }
     }
 
-    void agregarTarjetaBancaria(const std::string &numeroTarjeta, const std::string &fechaExpiracion, const std::string &cvv)
-    {
-        tarjetaBancaria = {numeroTarjeta, fechaExpiracion, cvv};
-        Utils::printSuccess("Tarjeta bancaria agregada exitosamente.");
-    }
-
-    void agregarCuentaPaypal(const std::string &email)
-    {
-        cuentaPaypal = email;
-        Utils::printSuccess("Cuenta PayPal agregada exitosamente.");
-    }
-
-    void agregarReferencia(const std::string &referencia)
-    {
-        referenciaPago = referencia;
-        Utils::printSuccess("Referencia de pago agregada exitosamente.");
-    }
-
 private:
     double saldo;
     int cantidadBoletos;
     int idBoletoActual;
-    struct TarjetaBancaria
-    {
-        std::string numero;
-        std::string fechaExpiracion;
-        std::string cvv;
-    } tarjetaBancaria;
-    std::string cuentaPaypal;
-    std::string referenciaPago;
+    std::vector<TarjetaBancaria> tarjetasBancarias;
 };
 
 class Usuario
 {
 public:
-    Usuario(const std::string &matricula, const std::string &nombre, const std::string &password, const std::string &telefono, double saldo, Cuenta cuenta)
-        : matricula(matricula), nombre(nombre), password(password), telefono(telefono), saldo(saldo), cuenta(cuenta) {}
+    Usuario(const std::string &matricula, const std::string &nombre, const std::string &password, const std::string &telefono, Cuenta cuenta)
+        : matricula(matricula), nombre(nombre), password(password), telefono(telefono), cuenta(cuenta) {}
 
     const std::string &getMatricula() const { return matricula; }
     const std::string &getNombre() const { return nombre; }
     const std::string &getPassword() const { return password; }
     const std::string &getTelefono() const { return telefono; }
+    Cuenta &getCuenta() { return cuenta; }
 
     void mostrar() const
     {
@@ -413,12 +321,10 @@ public:
                   << "\033[1;35mMatrícula:\033[0m \033[1;33m" << matricula << "\033[0m\n"
                   << "\033[1;35mNombre:\033[0m \033[1;33m" << nombre << "\033[0m\n"
                   << "\033[1;35mTeléfono:\033[0m \033[1;33m" << telefono << "\033[0m\n"
-                  << "\033[1;35mSaldo:\033[0m \033[1;33m$" << saldo << "\033[0m\n"
+                  << "\033[1;35mSaldo:\033[0m \033[1;33m$" << cuenta.getSaldo() << "\033[0m\n"
                   << "===========================\n";
     }
-    double getSaldo() const { return saldo; }
 
-    void setSaldo(double nuevoSaldo) { saldo = nuevoSaldo; }
     void setMatricula(const std::string &mat) { matricula = mat; }
     void setPassword(const std::string &pass) { password = pass; }
 
@@ -433,7 +339,6 @@ public:
                 Utils::printSuccess("¡Inicio de sesión exitoso!");
                 nombre = usuarioFromDB.getNombre();
                 telefono = usuarioFromDB.getTelefono();
-                saldo = usuarioFromDB.getSaldo();
                 return true;
             }
             else
@@ -472,8 +377,6 @@ private:
     std::string password;
     std::string telefono;
     Cuenta cuenta;
-
-    double saldo;
 };
 
 Usuario DatabaseManager::obtenerUsuario(const std::string &matricula)
@@ -494,9 +397,8 @@ Usuario DatabaseManager::obtenerUsuario(const std::string &matricula)
         std::string nombre = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1));
         std::string password = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
         std::string telefono = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
-        double saldo = sqlite3_column_double(stmt, 4);
         sqlite3_finalize(stmt);
-        return Usuario(matricula, nombre, password, telefono, saldo, Cuenta());
+        return Usuario(matricula, nombre, password, telefono, Cuenta());
     }
 
     sqlite3_finalize(stmt);
@@ -522,6 +424,7 @@ Cuenta DatabaseManager::crearCuenta(const std::string &usuario, int boletos, con
         return Cuenta(saldo);
     }
 }
+
 Usuario DatabaseManager::crearUsuario()
 {
     std::string matricula, nombre, password, telefono;
@@ -538,7 +441,9 @@ Usuario DatabaseManager::crearUsuario()
     std::cout << "\033[1;33mIngrese el teléfono:\033[0m ";
     std::getline(std::cin, telefono);
 
-    std::string sqlInsert = "INSERT INTO USERS (MATRICULA, NAME, PASSWORD, TELEFONO, SALDO) VALUES (" +
+    // TODO: CREAR CUENTA PARA INSERTARLA
+
+    std::string sqlInsert = "INSERT INTO USERS (MATRICULA, NAME, PASSWORD, TELEFONO, CUENTA) VALUES (" +
                             matricula + ", '" + nombre + "', '" + password + "', '" + telefono + "', " + std::to_string(0) + ");";
 
     int rc = sqlite3_exec(getDB(), sqlInsert.c_str(), callback, 0, &zErrMsg);
@@ -554,50 +459,8 @@ Usuario DatabaseManager::crearUsuario()
         Utils::printSuccess("Usuario creado exitosamente");
     }
 
-    return Usuario(matricula, nombre, password, telefono, 0, Cuenta());
+    return Usuario(matricula, nombre, password, telefono, Cuenta());
 }
-
-class Boleto
-{
-public:
-    Boleto(int id, const std::string &nombrePasajero, const std::string &destino)
-        : id(id), nombrePasajero(nombrePasajero), destino(destino) {}
-
-    void mostrar() const
-    {
-        std::cout << "ID del Boleto: " << id << "\n"
-                  << "Nombre del Pasajero: " << nombrePasajero << "\n"
-                  << "Destino: " << destino << "\n";
-    }
-
-private:
-    int id;
-    std::string nombrePasajero;
-    std::string destino;
-};
-
-class Autobus
-{
-public:
-    void crearBoleto(const std::string &nombrePasajero, const std::string &destino)
-    {
-        int id = boletos.size() + 1;
-        boletos.emplace_back(id, nombrePasajero, destino);
-        std::cout << "¡Boleto creado exitosamente!\n";
-    }
-
-    void mostrarBoletos() const
-    {
-        for (const auto &boleto : boletos)
-        {
-            boleto.mostrar();
-            std::cout << "-------------------\n";
-        }
-    }
-
-private:
-    std::vector<Boleto> boletos;
-};
 
 int main()
 {
@@ -605,11 +468,12 @@ int main()
 
     int opcion;
     std::string matricula, contrasena;
-    Usuario usuario("", "", "", "", 0.0, Cuenta());
+    Usuario usuario("", "", "", "", Cuenta());
 
     while (true)
     {
-        Utils::printMenu({"Iniciar Sesión", "Crear Usuario", "Salir"});
+        std::vector<std::string> menuOptions = {"Iniciar Sesión", "Crear Usuario", "Salir"};
+        Utils::printMenu(menuOptions);
         std::cin >> opcion;
 
         if (opcion == 3)
@@ -651,10 +515,10 @@ int main()
         }
     }
 
-    Autobus autobus;
     while (true)
     {
-        Utils::printMenu({"Abonar a mi cuenta", "Eliminar mi cuenta", "Comprar boleto", "Usar boleto", "Salir"});
+        std::vector<std::string> menuOptions = {"Abonar a mi cuenta", "Eliminar mi cuenta", "Comprar boleto", "Usar boleto", "Salir"};
+        Utils::printMenu(menuOptions);
         std::cin >> opcion;
 
         if (opcion == 5)
@@ -674,7 +538,23 @@ int main()
                 usuario.eliminarCuenta();
                 break;
             case 3:
-
+                if (usuario.getCuenta().getSaldo() >= Config::getInstance().getBoletoCosto())
+                {
+                    usuario.getCuenta().comprarBoleto();
+                    std::time_t t = std::time(nullptr);
+                    std::tm *tm = std::localtime(&t);
+                    tm->tm_mday += 10;
+                    std::mktime(tm);
+                    char buffer[11];
+                    std::strftime(buffer, sizeof(buffer), "%Y-%m-%d", tm);
+                    std::string fechaExpiracion(buffer);
+                    Boleto boleto(fechaExpiracion, StatusBoleto::Nuevo);
+                    boleto.mostrar();
+                }
+                else
+                {
+                    Utils::printError("Saldo insuficiente para comprar un boleto.");
+                }
                 break;
             case 4:
                 // Código para usar boleto

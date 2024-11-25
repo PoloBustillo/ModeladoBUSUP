@@ -33,17 +33,18 @@ std::vector<Boleto> DatabaseManager::getBoletos(const std::string &cuentaId)
         const unsigned char *activeDateText = sqlite3_column_text(stmtBoletos, 4);
         std::string activeDate = activeDateText ? reinterpret_cast<const char *>(activeDateText) : "";
         std::string currentDate = Utils::getDate();
-        // TODO: actualizar fecha expiracion
         std::string hourAhead = Utils::getDate(0, 0, 3);
         StatusBoleto status;
+
         Utils::printSuccess(activeDate);
-        Utils::printSuccess(hourAhead);
-        Utils::printSuccess(activeDate < hourAhead ? "true" : "false");
+        Utils::printSuccess(expiracion);
+        Utils::printSuccess(activeDate < expiracion ? "true" : "false");
+
         if (statusStr == "nuevo" && expiracion < currentDate)
         {
             status = StatusBoleto::Usado;
         }
-        else if (statusStr == "activo" && activeDate > hourAhead)
+        else if (statusStr == "activo" && expiracion < currentDate)
         {
             status = StatusBoleto::Usado;
         }
@@ -191,6 +192,11 @@ void DatabaseManager::updateBoletoFechaUso(const std::string &boletoId, const st
 {
     std::string sqlUpdateFechaUso = "UPDATE BOLETOS SET ACTIVE_DATE = '" + fechaUso + "' WHERE ID = '" + boletoId + "';";
     DatabaseManager::getInstance().executeQuery(sqlUpdateFechaUso, "Error al actualizar la fecha de uso del boleto en la base de datos.", "Fecha de uso del boleto actualizada exitosamente");
+}
+void DatabaseManager::updateBoletoFechaExpiracion(const std::string &boletoId, const std::string &nuevaFechaExpiracion)
+{
+    std::string sqlUpdateFechaExpiracion = "UPDATE BOLETOS SET EXPIRACION = '" + nuevaFechaExpiracion + "' WHERE ID = '" + boletoId + "';";
+    DatabaseManager::getInstance().executeQuery(sqlUpdateFechaExpiracion, "Error al actualizar la fecha de expiración del boleto en la base de datos.", "Fecha de expiración del boleto actualizada exitosamente");
 }
 
 void DatabaseManager::deleteBankCard(const std::string &tarjetaId)

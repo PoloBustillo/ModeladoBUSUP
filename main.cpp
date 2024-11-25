@@ -77,7 +77,9 @@ int main()
 
     while (true)
     {
-        std::vector<std::string> menuOptions = {"Abonar a mi cuenta", "Eliminar mi cuenta", "Comprar boleto", "Usar boleto", "Mostrar cuenta", "Agregar Tarjeta", "Mostrar tarjetas", "Mostrar Transacciones", "Mostrar Boletos", "Eliminar Tarjeta", "Salir"};
+        std::vector<std::string> menuOptions = {"Abonar a mi cuenta", "Eliminar mi cuenta", "Comprar boleto", "Usar boleto", "Mostrar cuenta",
+                                                "Agregar Tarjeta", "Mostrar tarjetas", "Mostrar Transacciones", "Mostrar Boletos", "Eliminar Tarjeta",
+                                                "Mostrat boletos activos", "Salir"};
         Utils::printMenu(menuOptions);
         std::string input;
         std::cin >> input;
@@ -221,6 +223,10 @@ int main()
                         DatabaseManager::getInstance().updateBoletoStatus(boletos[boletoIndex].getId(), StatusBoleto::Activo);
                         boletos[boletoIndex].setActiveDate(fechaActual);
                         DatabaseManager::getInstance().updateBoletoFechaUso(boletos[boletoIndex].getId(), fechaActual);
+                        std::array<int, 3> activationTime = Config::getInstance().getActiveTime();
+                        std::string newFechaExpiracion = Utils::getDate(activationTime[0], activationTime[1], activationTime[2]);
+                        boletos[boletoIndex].setFechaExpiracion(newFechaExpiracion);
+                        DatabaseManager::getInstance().updateBoletoFechaExpiracion(boletos[boletoIndex].getId(), newFechaExpiracion);
                         boletos[boletoIndex].mostrar();
                         usuario.getCuenta().setBoletos(boletos);
                     }

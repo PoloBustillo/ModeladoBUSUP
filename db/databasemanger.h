@@ -65,6 +65,7 @@ public:
     void deleteBankCard(const std::string &tarjetaId);
     void updateBoletoStatus(const std::string &boletoId, StatusBoleto newStatus);
     void updateBoletoFechaUso(const std::string &boletoId, const std::string &fechaUso);
+    void updateBoletoFechaExpiracion(const std::string &boletoId, const std::string &nuevaFechaExpiracion);
     Usuario createUser();
     Cuenta createAccount(const std::string &id, double saldo);
     TarjetaBancaria addBankCard(TarjetaBancaria newCard, const std::string &accountId);

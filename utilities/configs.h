@@ -11,6 +11,7 @@ public:
     void setDbName(const std::string &name) { dbName = name; }
     double getBoletoCosto() const { return 7.5; }
     int getExpiration() const { return 10; }
+    std::array<int, 3> getActiveTime() const { return {0, 0, 3}; }
 
 private:
     Config() : dbName("busup-v2.db") {}

@@ -116,6 +116,7 @@ private:
                     "EXPIRACION TEXT NOT NULL,"
                     "STATUS TEXT NOT NULL CHECK(STATUS IN ('activo', 'usado', 'nuevo')),"
                     "CUENTA TEXT NOT NULL,"
+                    "ACTIVE_DATE TEXT,"
                     "FOREIGN KEY(CUENTA) REFERENCES CUENTAS(ID));",
                     "Error creando tabla BOLETOS.");
 

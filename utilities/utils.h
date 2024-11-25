@@ -87,12 +87,20 @@ public:
         std::cout << "\033[0m"
                   << "\n\nIngrese su opción: ";
     }
-    static std::string getDate(int daysAhead = 0)
+    static std::string getDate(int daysAhead = 0, int hoursAhead = 0, int minutesAhead = 0)
     {
         auto now = std::chrono::system_clock::now();
         if (daysAhead != 0)
         {
             now += std::chrono::hours(24 * daysAhead);
+        }
+        if (hoursAhead != 0)
+        {
+            now += std::chrono::hours(hoursAhead);
+        }
+        if (minutesAhead != 0)
+        {
+            now += std::chrono::minutes(minutesAhead);
         }
         std::time_t now_c = std::chrono::system_clock::to_time_t(now);
         char buffer[100];

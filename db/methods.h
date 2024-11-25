@@ -13,6 +13,53 @@ Usuario DatabaseManager::getUser(const std::string &matricula)
     return Usuario(matricula, nombre, password, telefono, nuevaCuenta);
 }
 
+std::vector<Boleto> DatabaseManager::getBoletos(const std::string &cuentaId)
+{
+    std::string sqlSelectBoletos = "SELECT * FROM BOLETOS WHERE CUENTA = '" + cuentaId + "';";
+    sqlite3_stmt *stmtBoletos;
+    int rc = sqlite3_prepare_v2(getDB(), sqlSelectBoletos.c_str(), -1, &stmtBoletos, 0);
+    if (rc != SQLITE_OK)
+    {
+        Utils::printError("Error al preparar la consulta de boletos: " + std::string(sqlite3_errmsg(db)));
+        throw std::runtime_error("Error al obtener los boletos de la base de datos.");
+    }
+
+    std::vector<Boleto> boletos;
+    while ((rc = sqlite3_step(stmtBoletos)) == SQLITE_ROW)
+    {
+        std::string idBoleto = reinterpret_cast<const char *>(sqlite3_column_text(stmtBoletos, 0));
+        std::string expiracion = reinterpret_cast<const char *>(sqlite3_column_text(stmtBoletos, 1));
+        std::string statusStr = reinterpret_cast<const char *>(sqlite3_column_text(stmtBoletos, 2));
+        const unsigned char *activeDateText = sqlite3_column_text(stmtBoletos, 4);
+        std::string activeDate = activeDateText ? reinterpret_cast<const char *>(activeDateText) : "";
+        std::string currentDate = Utils::getDate();
+        std::string hourAhead = Utils::getDate(0, 0, 1);
+        StatusBoleto status;
+        if (statusStr == "nuevo" && expiracion < currentDate)
+        {
+            status = StatusBoleto::Usado;
+        }
+        else if (statusStr == "nuevo")
+        {
+            status = StatusBoleto::Nuevo;
+        }
+        else if (statusStr == "activo" && activeDate < hourAhead)
+        {
+            status = StatusBoleto::Usado;
+        }
+        else
+        {
+            status = StatusBoleto::Activo;
+        }
+        Boleto boleto(expiracion, status);
+        boleto.setId(idBoleto);
+        boletos.push_back(boleto);
+    }
+    sqlite3_finalize(stmtBoletos);
+
+    return boletos;
+}
+
 Cuenta DatabaseManager::getAccount(const std::string &cuentaId)
 {
     std::string sqlSelectCuenta = "SELECT * FROM CUENTAS WHERE ID = '" + cuentaId + "';";
@@ -53,34 +100,6 @@ std::vector<TarjetaBancaria> DatabaseManager::getCards(const std::string &cuenta
     sqlite3_finalize(stmtTarjetas);
 
     return tarjetas;
-}
-
-std::vector<Boleto> DatabaseManager::getBoletos(const std::string &cuentaId)
-{
-    std::string sqlSelectBoletos = "SELECT * FROM BOLETOS WHERE CUENTA = '" + cuentaId + "';";
-    sqlite3_stmt *stmtBoletos;
-    int rc = sqlite3_prepare_v2(getDB(), sqlSelectBoletos.c_str(), -1, &stmtBoletos, 0);
-    if (rc != SQLITE_OK)
-    {
-        Utils::printError("Error al preparar la consulta de boletos: " + std::string(sqlite3_errmsg(db)));
-        throw std::runtime_error("Error al obtener los boletos de la base de datos.");
-    }
-
-    std::vector<Boleto> boletos;
-    while ((rc = sqlite3_step(stmtBoletos)) == SQLITE_ROW)
-    {
-        std::string idBoleto = reinterpret_cast<const char *>(sqlite3_column_text(stmtBoletos, 0));
-        std::string expiracion = reinterpret_cast<const char *>(sqlite3_column_text(stmtBoletos, 1));
-        std::string statusStr = reinterpret_cast<const char *>(sqlite3_column_text(stmtBoletos, 2));
-        StatusBoleto status = (statusStr == "nuevo") ? StatusBoleto::Nuevo : (statusStr == "activo") ? StatusBoleto::Activo
-                                                                                                     : StatusBoleto::Usado;
-        Boleto boleto(expiracion, status);
-        boleto.setId(idBoleto);
-        boletos.push_back(boleto);
-    }
-    sqlite3_finalize(stmtBoletos);
-
-    return boletos;
 }
 
 Cuenta DatabaseManager::createAccount(const std::string &id, double saldo)

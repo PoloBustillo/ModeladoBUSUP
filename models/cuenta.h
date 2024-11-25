@@ -59,7 +59,8 @@ public:
         {
             std::cout << "\033[1;35mID del Boleto:\033[0m \033[1;33m" << boleto.getId() << "\033[0m\n"
                       << "\033[1;35mFecha de Expiración:\033[0m \033[1;33m" << boleto.getFechaExpiracion() << "\033[0m\n"
-                      << "\033[1;35mEstado:\033[0m \033[1;33m" << boleto.statusToString() << "\033[0m\n";
+                      << "\033[1;35mEstado:\033[0m \033[1;33m" << boleto.statusToString() << "\033[0m\n"
+                      << "\033[1;35mFecha de Activación:\033[0m \033[1;33m" << boleto.getActiveDate() << "\033[0m\n";
             std::cout << "--------------------------------------------------------------------\n";
         }
         std::cout << "====================================================================\n";
@@ -83,8 +84,8 @@ public:
         Boleto nuevoBoleto(fechaExpiracion, StatusBoleto::Nuevo);
         boletos.push_back(nuevoBoleto);
         // Insertar el boleto en la base de datos
-        std::string sqlInsertBoleto = "INSERT INTO BOLETOS (ID, EXPIRACION, STATUS, CUENTA) VALUES ('" +
-                                      nuevoBoleto.getId() + "', '" + fechaExpiracion + "', 'nuevo', '" + id + "');";
+        std::string sqlInsertBoleto = "INSERT INTO BOLETOS (ID, EXPIRACION, STATUS, CUENTA, ACTIVE_DATE) VALUES ('" +
+                                      nuevoBoleto.getId() + "', '" + fechaExpiracion + "', 'nuevo', '" + id + "', NULL);";
         DatabaseManager::getInstance().executeQuery(sqlInsertBoleto, "Error al insertar el boleto en la base de datos", "Boleto comprado exitosamente.");
         nuevoBoleto.mostrar();
     }

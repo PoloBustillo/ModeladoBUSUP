@@ -36,10 +36,6 @@ std::vector<Boleto> DatabaseManager::getBoletos(const std::string &cuentaId)
         std::string hourAhead = Utils::getDate(0, 0, 3);
         StatusBoleto status;
 
-        Utils::printSuccess(activeDate);
-        Utils::printSuccess(expiracion);
-        Utils::printSuccess(activeDate < expiracion ? "true" : "false");
-
         if (statusStr == "nuevo" && expiracion < currentDate)
         {
             status = StatusBoleto::Usado;

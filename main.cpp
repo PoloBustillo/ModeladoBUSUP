@@ -331,11 +331,14 @@ int main()
             break;
             case 11: // Mostrar boletos activos
             {
+
                 std::vector<Boleto> boletos = DatabaseManager::getInstance().getBoletos(usuario.getCuenta().getId());
                 for (const auto &boleto : boletos)
                 {
                     if (boleto.getStatus() == StatusBoleto::Activo)
                     {
+                        std::string command = "qrcode-terminal '" + boleto.getId() + "',{small: true}";
+                        system(command.c_str());
                         boleto.mostrar();
                     }
                 }

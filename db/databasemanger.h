@@ -62,6 +62,9 @@ public:
     void registerTransaction(Transaccion transaction);
     std::vector<TarjetaBancaria> getCards(const std::string &accountId);
     std::vector<Boleto> getBoletos(const std::string &accountId);
+    void deleteBankCard(const std::string &tarjetaId);
+    void updateBoletoStatus(const std::string &boletoId, StatusBoleto newStatus);
+    void updateBoletoFechaUso(const std::string &boletoId, const std::string &fechaUso);
     Usuario createUser();
     Cuenta createAccount(const std::string &id, double saldo);
     TarjetaBancaria addBankCard(TarjetaBancaria newCard, const std::string &accountId);

@@ -12,6 +12,27 @@
 class Utils
 {
 public:
+    static double validatePositiveNumber(const std::string &prompt)
+    {
+        std::string cantidadStr;
+        double cantidad = 0;
+        do
+        {
+            std::cout << prompt;
+            std::cin >> cantidadStr;
+            if (!std::all_of(cantidadStr.begin(), cantidadStr.end(), ::isdigit))
+            {
+                Utils::printError("Ingrese solo dígitos.");
+                continue;
+            }
+            cantidad = std::stod(cantidadStr);
+            if (cantidad <= 0)
+            {
+                Utils::printError("Debe ser mayor que cero.");
+            }
+        } while (cantidad <= 0 || !std::all_of(cantidadStr.begin(), cantidadStr.end(), ::isdigit));
+        return cantidad;
+    }
     static void mostrarBarraDeCarga(int duracionSegundos)
     {
         int anchoBarra = 30;

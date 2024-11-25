@@ -33,9 +33,17 @@ std::vector<Boleto> DatabaseManager::getBoletos(const std::string &cuentaId)
         const unsigned char *activeDateText = sqlite3_column_text(stmtBoletos, 4);
         std::string activeDate = activeDateText ? reinterpret_cast<const char *>(activeDateText) : "";
         std::string currentDate = Utils::getDate();
-        std::string hourAhead = Utils::getDate(0, 0, 1);
+        // TODO: actualizar fecha expiracion
+        std::string hourAhead = Utils::getDate(0, 0, 3);
         StatusBoleto status;
+        Utils::printSuccess(activeDate);
+        Utils::printSuccess(hourAhead);
+        Utils::printSuccess(activeDate < hourAhead ? "true" : "false");
         if (statusStr == "nuevo" && expiracion < currentDate)
+        {
+            status = StatusBoleto::Usado;
+        }
+        else if (statusStr == "activo" && activeDate > hourAhead)
         {
             status = StatusBoleto::Usado;
         }
@@ -43,15 +51,18 @@ std::vector<Boleto> DatabaseManager::getBoletos(const std::string &cuentaId)
         {
             status = StatusBoleto::Nuevo;
         }
-        else if (statusStr == "activo" && activeDate < hourAhead)
-        {
-            status = StatusBoleto::Usado;
-        }
-        else
+        else if (statusStr == "activo")
         {
             status = StatusBoleto::Activo;
         }
+        else if (statusStr == "usado")
+        {
+            status = StatusBoleto::Usado;
+        }
+
+        updateBoletoStatus(idBoleto, status);
         Boleto boleto(expiracion, status);
+        boleto.setActiveDate(activeDate);
         boleto.setId(idBoleto);
         boletos.push_back(boleto);
     }
@@ -175,4 +186,22 @@ void DatabaseManager::registerTransaction(Transaccion transaccion)
                                 " WHERE ID = (SELECT CUENTA FROM USERS WHERE MATRICULA = '" + transaccion.getUsuario() + "');";
         DatabaseManager::getInstance().executeQuery(sqlUpdate, "Error al actualizar el saldo de la cuenta en la base de datos.", "Saldo de la cuenta actualizado exitosamente");
     }
+}
+
+void DatabaseManager::updateBoletoStatus(const std::string &boletoId, StatusBoleto newStatus)
+{
+    std::string statusStr = (newStatus == StatusBoleto::Nuevo ? "nuevo" : (newStatus == StatusBoleto::Activo ? "activo" : "usado"));
+    std::string sqlUpdateStatus = "UPDATE BOLETOS SET STATUS = '" + statusStr + "' WHERE ID = '" + boletoId + "';";
+    DatabaseManager::getInstance().executeQuery(sqlUpdateStatus, "Error al actualizar el estado del boleto en la base de datos.", "Estado del boleto actualizado exitosamente");
+}
+void DatabaseManager::updateBoletoFechaUso(const std::string &boletoId, const std::string &fechaUso)
+{
+    std::string sqlUpdateFechaUso = "UPDATE BOLETOS SET ACTIVE_DATE = '" + fechaUso + "' WHERE ID = '" + boletoId + "';";
+    DatabaseManager::getInstance().executeQuery(sqlUpdateFechaUso, "Error al actualizar la fecha de uso del boleto en la base de datos.", "Fecha de uso del boleto actualizada exitosamente");
+}
+
+void DatabaseManager::deleteBankCard(const std::string &tarjetaId)
+{
+    std::string sqlDelete = "DELETE FROM TARJETASBANCARIAS WHERE ID = '" + tarjetaId + "';";
+    DatabaseManager::getInstance().executeQuery(sqlDelete, "Error al eliminar la tarjeta bancaria de la base de datos.", "Tarjeta bancaria eliminada exitosamente");
 }

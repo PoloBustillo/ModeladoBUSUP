@@ -77,7 +77,22 @@ public:
             Utils::printError("Cantidad inválida para abonar.");
         }
     }
+    void eliminarTarjeta(const std::string &idTarjeta)
+    {
+        auto it = std::find_if(tarjetasBancarias.begin(), tarjetasBancarias.end(),
+                               [&idTarjeta](const TarjetaBancaria &tarjeta)
+                               { return tarjeta.getId() == idTarjeta; });
 
+        if (it != tarjetasBancarias.end())
+        {
+            tarjetasBancarias.erase(it);
+            Utils::printSuccess("Tarjeta eliminada exitosamente.");
+        }
+        else
+        {
+            Utils::printError("Tarjeta no encontrada.");
+        }
+    }
     void comprarBoleto()
     {
         std::string fechaExpiracion = Utils::getDate(10);

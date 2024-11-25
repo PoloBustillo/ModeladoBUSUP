@@ -83,7 +83,7 @@ int main()
 
     while (true)
     {
-        std::vector<std::string> menuOptions = {"Abonar a mi cuenta", "Eliminar mi cuenta", "Comprar boleto", "Usar boleto", "Mostrar cuenta", "Agregar Tarjeta", "Mostrar tarjetas", "Mostrar Transacciones", "Mostrar Boletos", "Salir"};
+        std::vector<std::string> menuOptions = {"Abonar a mi cuenta", "Eliminar mi cuenta", "Comprar boleto", "Usar boleto", "Mostrar cuenta", "Agregar Tarjeta", "Mostrar tarjetas", "Mostrar Transacciones", "Mostrar Boletos", "Eliminar Tarjeta", "Salir"};
         Utils::printMenu(menuOptions);
         std::string input;
         std::cin >> input;
@@ -96,7 +96,7 @@ int main()
             opcion = -1; // Invalid option
         }
 
-        if (opcion == 10)
+        if (opcion == 11)
         {
             Utils::printSuccess("Saliendo...");
             exit(0);
@@ -107,37 +107,27 @@ int main()
             switch (opcion)
             {
             case 1: // Abonar cuenta
-                if (usuario.getCuenta().getTarjetasBancarias().empty())
-                {
-                    Utils::printError("No tarjetas de crédito. No puede abonar.");
-                }
-                else
-                {
-                    try
-                    {
-                        int tarjetaIndex = usuario.getCuenta().getTarjetaIndex();
-                        double cantidad;
-                        std::cout << "\033[1;33mIngrese la cantidad a abonar:\033[0m ";
-                        std::string cantidadStr;
-                        std::cin >> cantidadStr;
-                        while (!std::all_of(cantidadStr.begin(), cantidadStr.end(), ::isdigit))
-                        {
-                            Utils::printError("Cantidad inválida. Ingrese solo dígitos.");
-                            std::cout << "\033[1;33mIngrese la cantidad a abonar:\033[0m ";
-                            std::cin >> cantidadStr;
-                        }
-                        cantidad = std::stod(cantidadStr);
 
-                        Transaccion transaccion(cantidad, StatusTransaccion::Abono, usuario.getMatricula(), usuario.getCuenta().getTarjetasBancarias()[tarjetaIndex].getId());
-                        DatabaseManager::getInstance().registerTransaction(transaccion);
-                        usuario.getCuenta().abonar(cantidad);
-                    }
-                    catch (const std::runtime_error &e)
+                try
+                {
+                    if (usuario.getCuenta().getTarjetasBancarias().empty())
                     {
-                        Utils::printError(e.what());
-                        continue;
+                        Utils::printError("No hay tarjetas de crédito.");
+                        break;
                     }
+                    int tarjetaIndex = usuario.getCuenta().getTarjetaIndex();
+                    double cantidad;
+                    cantidad = Utils::validatePositiveNumber("\033[1;33mIngrese la cantidad a abonar:\033[0m ");
+                    Transaccion transaccion(cantidad, StatusTransaccion::Abono, usuario.getMatricula(), usuario.getCuenta().getTarjetasBancarias()[tarjetaIndex].getId());
+                    DatabaseManager::getInstance().registerTransaction(transaccion);
+                    usuario.getCuenta().abonar(cantidad);
                 }
+                catch (const std::runtime_error &e)
+                {
+                    Utils::printError(e.what());
+                    continue;
+                }
+
                 break;
             case 2: // Eliminar cuenta
                 char confirmacion;
@@ -210,56 +200,10 @@ int main()
             case 4: // Usar boleto
             {
                 std::string fechaActual = Utils::getDate();
-
-                std::vector<Boleto> boletosValidos;
-                for (size_t i = 0; i < usuario.getCuenta().getBoletos().size(); ++i)
-                {
-                    Boleto boleto = usuario.getCuenta().getBoletos()[i];
-                    if (boleto.getFechaExpiracion() > fechaActual)
-                    {
-                        std::cout << "\033[1;33m" << i << ".\033[0m ";
-                        boleto.mostrar();
-                        std::string sqlSelectBoleto = "SELECT STATUS FROM BOLETOS WHERE ID = '" + boleto.getId() + "';";
-                        sqlite3_stmt *stmtBoleto;
-                        int rc = sqlite3_prepare_v2(DatabaseManager::getInstance().getDB(), sqlSelectBoleto.c_str(), -1, &stmtBoleto, 0);
-                        if (rc != SQLITE_OK)
-                        {
-                            Utils::printError("Error al preparar la consulta del boleto: " + std::string(sqlite3_errmsg(DatabaseManager::getInstance().getDB())));
-                            throw std::runtime_error("Error al obtener el estado del boleto de la base de datos.");
-                        }
-
-                        rc = sqlite3_step(stmtBoleto);
-                        if (rc == SQLITE_ROW)
-                        {
-                            std::string statusStr = reinterpret_cast<const char *>(sqlite3_column_text(stmtBoleto, 0));
-                            if (statusStr == "activo")
-                            {
-                                Utils::printError("El boleto ya está activo.");
-
-                                sqlite3_finalize(stmtBoleto);
-                                continue;
-                            }
-                        }
-                        sqlite3_finalize(stmtBoleto);
-                        boletosValidos.push_back(boleto);
-                    }
-                    else
-                    {
-                        boleto.setStatus(StatusBoleto::Usado);
-                        std::string sqlUpdateBoleto = "UPDATE BOLETOS SET STATUS = 'usado' WHERE ID = '" + boleto.getId() + "';";
-                        char *zErrMsg = 0;
-                        int rc = sqlite3_exec(DatabaseManager::getInstance().getDB(), sqlUpdateBoleto.c_str(), nullptr, 0, &zErrMsg);
-
-                        if (rc != SQLITE_OK)
-                        {
-                            Utils::printError("Error al actualizar el estado del boleto en la base de datos: " + std::string(zErrMsg));
-                            sqlite3_free(zErrMsg);
-                            throw std::runtime_error("Error al actualizar el estado del boleto en la base de datos.");
-                        }
-                    }
-                }
-
                 int boletoIndex;
+                std::vector<Boleto> boletos = DatabaseManager::getInstance().getBoletos(usuario.getCuenta().getId());
+                usuario.getCuenta().mostrarBoletos();
+
                 std::cout << "\033[1;33mIngrese el índice del boleto a usar:\033[0m ";
                 std::string boletoIndexStr;
                 std::cin >> boletoIndexStr;
@@ -271,28 +215,24 @@ int main()
                 }
                 boletoIndex = std::stoi(boletoIndexStr);
 
-                if (boletoIndex < 0 || boletoIndex >= boletosValidos.size())
+                if (boletoIndex < 0 || boletoIndex >= boletos.size())
                 {
                     Utils::printError("Índice de boleto inválido.");
                 }
                 else
                 {
-                    Boleto &boleto = boletosValidos[boletoIndex];
-                    boleto.setStatus(StatusBoleto::Activo);
-
-                    std::string sqlUpdateBoleto = "UPDATE BOLETOS SET STATUS = 'activo' WHERE ID = '" + boleto.getId() + "';";
-                    char *zErrMsg = 0;
-                    int rc = sqlite3_exec(DatabaseManager::getInstance().getDB(), sqlUpdateBoleto.c_str(), nullptr, 0, &zErrMsg);
-
-                    if (rc != SQLITE_OK)
+                    if (boletos[boletoIndex].getStatus() == StatusBoleto::Nuevo)
                     {
-                        Utils::printError("Error al actualizar el estado del boleto en la base de datos: " + std::string(zErrMsg));
-                        sqlite3_free(zErrMsg);
-                        throw std::runtime_error("Error al actualizar el estado del boleto en la base de datos.");
+                        boletos[boletoIndex].setStatus(StatusBoleto::Activo);
+                        DatabaseManager::getInstance().updateBoletoStatus(boletos[boletoIndex].getId(), StatusBoleto::Activo);
+                        boletos[boletoIndex].setActiveDate(fechaActual);
+                        DatabaseManager::getInstance().updateBoletoFechaUso(boletos[boletoIndex].getId(), fechaActual);
+                        boletos[boletoIndex].mostrar();
+                        usuario.getCuenta().setBoletos(boletos);
                     }
                     else
                     {
-                        Utils::printSuccess("Boleto usado exitosamente.");
+                        Utils::printError("Boleto no es nuevo");
                     }
                 }
                 break;
@@ -367,6 +307,28 @@ int main()
             case 9:
                 usuario.getCuenta().mostrarBoletos();
                 break;
+            case 10: // Eliminar Tarjeta
+            {
+                try
+                {
+                    if (usuario.getCuenta().getTarjetasBancarias().empty())
+                    {
+                        Utils::printError("No hay tarjetas de crédito.");
+                        break;
+                    }
+                    int tarjetaIndex = usuario.getCuenta().getTarjetaIndex();
+
+                    std::string tarjetaId = usuario.getCuenta().getTarjetasBancarias()[tarjetaIndex].getId();
+                    DatabaseManager::getInstance().deleteBankCard(tarjetaId);
+                    usuario.getCuenta().eliminarTarjeta(tarjetaId);
+                    Utils::printSuccess("Tarjeta eliminada exitosamente.");
+                }
+                catch (const std::exception &e)
+                {
+                    std::cerr << e.what() << '\n';
+                }
+            }
+            break;
             default:
                 Utils::printError("Opción inválida. Intente de nuevo!");
                 break;

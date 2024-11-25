@@ -12,6 +12,19 @@
 class Utils
 {
 public:
+    static std::string validateMatricula()
+    {
+        std::string matricula;
+        std::cout << "\033[1;33mIngrese su nombre de matrícula:\033[0m ";
+        std::cin >> matricula;
+        while (matricula.length() != 7 || !std::all_of(matricula.begin(), matricula.end(), ::isdigit))
+        {
+            Utils::printError("La matrícula debe tener 7 dígitos.");
+            std::cout << "\033[1;33mIngrese su nombre de matrícula:\033[0m ";
+            std::cin >> matricula;
+        }
+        return matricula;
+    }
     static double validatePositiveNumber(const std::string &prompt)
     {
         std::string cantidadStr;

@@ -126,14 +126,7 @@ Usuario DatabaseManager::createUser()
     double saldo;
     char *zErrMsg = 0;
 
-    std::cout << "\033[1;33mIngrese la matrícula:\033[0m ";
-    std::cin >> matricula;
-    while (matricula.length() != 7 || !std::all_of(matricula.begin(), matricula.end(), ::isdigit))
-    {
-        Utils::printError("La matrícula debe tener 7 dígitos.");
-        std::cout << "\033[1;33mIngrese la matrícula:\033[0m ";
-        std::cin >> matricula;
-    }
+    matricula = Utils::validateMatricula();
     std::cout << "\033[1;33mIngrese el nombre:\033[0m ";
     std::cin.ignore();
     std::getline(std::cin, nombre);

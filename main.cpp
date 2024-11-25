@@ -10,50 +10,7 @@
 #include "db/databasemanger.h"
 #include "models/tarjeta.h"
 #include "models/usuario.h"
-class Boleto
-{
-public:
-    Boleto(const std::string &fechaExpiracion, StatusBoleto status)
-        : fechaExpiracion(fechaExpiracion), status(status)
-    {
-        id = Utils::generateUUID();
-    }
-    const std::string &getId() const { return id; }
-    const std::string &getFechaExpiracion() const { return fechaExpiracion; }
-    StatusBoleto getStatus() const { return status; }
-
-    void setId(const std::string &nuevoId) { id = nuevoId; }
-    void setFechaExpiracion(const std::string &nuevaFecha) { fechaExpiracion = nuevaFecha; }
-    void setStatus(StatusBoleto nuevoStatus) { status = nuevoStatus; }
-    std::string statusToString() const
-    {
-        switch (status)
-        {
-        case StatusBoleto::Activo:
-            return "Activo";
-        case StatusBoleto::Nuevo:
-            return "Nuevo";
-        case StatusBoleto::Usado:
-            return "Usado";
-        default:
-            return "Desconocido";
-        }
-    }
-    void mostrar() const
-    {
-        std::cout << "====================================================================\n"
-                  << "\033[1;35mID del Boleto:\033[0m \033[1;33m" << id << "\033[0m\n"
-                  << "\033[1;35mFecha de Expiración:\033[0m \033[1;33m" << fechaExpiracion << "\033[0m\n"
-                  << "\033[1;35mEstado:\033[0m \033[1;33m" << statusToString() << "\033[0m\n"
-                  << "--------------------------------------------------------------------\n";
-    }
-
-private:
-    std::string id;
-    std::string fechaExpiracion;
-    StatusBoleto status;
-};
-
+#include "models/boletos.h"
 class Cuenta
 {
 public:
@@ -762,23 +719,57 @@ int main()
                 break;
             case 4:
             {
-                std::time_t t = std::time(nullptr);
-                std::tm *tm = std::localtime(&t);
-                char buffer[11];
-                std::strftime(buffer, sizeof(buffer), "%Y-%m-%d", tm);
-                std::string fechaActual(buffer);
+
+                std::string fechaActual = Utils::getDate();
 
                 std::vector<Boleto> boletosValidos;
                 for (size_t i = 0; i < usuario.getCuenta().getBoletos().size(); ++i)
                 {
-                    const auto &boleto = usuario.getCuenta().getBoletos()[i];
+                    Boleto boleto = usuario.getCuenta().getBoletos()[i];
                     if (boleto.getFechaExpiracion() > fechaActual)
                     {
                         std::cout << "\033[1;33m" << i << ".\033[0m ";
                         boleto.mostrar();
+                        std::string sqlSelectBoleto = "SELECT STATUS FROM BOLETOS WHERE ID = '" + boleto.getId() + "';";
+                        sqlite3_stmt *stmtBoleto;
+                        int rc = sqlite3_prepare_v2(DatabaseManager::getInstance().getDB(), sqlSelectBoleto.c_str(), -1, &stmtBoleto, 0);
+                        if (rc != SQLITE_OK)
+                        {
+                            Utils::printError("Error al preparar la consulta del boleto: " + std::string(sqlite3_errmsg(DatabaseManager::getInstance().getDB())));
+                            throw std::runtime_error("Error al obtener el estado del boleto de la base de datos.");
+                        }
+
+                        rc = sqlite3_step(stmtBoleto);
+                        if (rc == SQLITE_ROW)
+                        {
+                            std::string statusStr = reinterpret_cast<const char *>(sqlite3_column_text(stmtBoleto, 0));
+                            if (statusStr == "activo")
+                            {
+                                Utils::printError("El boleto ya está activo.");
+
+                                sqlite3_finalize(stmtBoleto);
+                                continue;
+                            }
+                        }
+                        sqlite3_finalize(stmtBoleto);
                         boletosValidos.push_back(boleto);
                     }
+                    else
+                    {
+                        boleto.setStatus(StatusBoleto::Usado);
+                        std::string sqlUpdateBoleto = "UPDATE BOLETOS SET STATUS = 'usado' WHERE ID = '" + boleto.getId() + "';";
+                        char *zErrMsg = 0;
+                        int rc = sqlite3_exec(DatabaseManager::getInstance().getDB(), sqlUpdateBoleto.c_str(), nullptr, 0, &zErrMsg);
+
+                        if (rc != SQLITE_OK)
+                        {
+                            Utils::printError("Error al actualizar el estado del boleto en la base de datos: " + std::string(zErrMsg));
+                            sqlite3_free(zErrMsg);
+                            throw std::runtime_error("Error al actualizar el estado del boleto en la base de datos.");
+                        }
+                    }
                 }
+
                 int boletoIndex;
                 std::cout << "\033[1;33mIngrese el índice del boleto a usar:\033[0m ";
                 std::string boletoIndexStr;

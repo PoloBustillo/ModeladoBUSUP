@@ -87,7 +87,18 @@ public:
         std::cout << "\033[0m"
                   << "\n\nIngrese su opción: ";
     }
-
+    static std::string getDate(int daysAhead = 0)
+    {
+        auto now = std::chrono::system_clock::now();
+        if (daysAhead != 0)
+        {
+            now += std::chrono::hours(24 * daysAhead);
+        }
+        std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+        char buffer[100];
+        std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", std::localtime(&now_c));
+        return std::string(buffer);
+    }
     static std::string centerText(const std::string &text)
     {
         int width = 120;

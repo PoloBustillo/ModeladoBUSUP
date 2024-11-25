@@ -54,6 +54,7 @@ std::vector<Boleto> DatabaseManager::getBoletos(const std::string &cuentaId)
         }
         else if (statusStr == "activo")
         {
+
             status = StatusBoleto::Activo;
         }
         else if (statusStr == "usado")
@@ -83,7 +84,17 @@ Cuenta DatabaseManager::getAccount(const std::string &cuentaId)
     Cuenta nuevaCuenta(saldo);
     nuevaCuenta.setId(idCuenta);
     nuevaCuenta.setTarjetasBancarias(getCards(idCuenta));
-    nuevaCuenta.setBoletos(getBoletos(idCuenta));
+    std::vector<Boleto> boletos = getBoletos(idCuenta);
+    std::vector<Boleto> boletosActivos;
+    for (const auto &boleto : boletos)
+    {
+        if (boleto.getStatus() == StatusBoleto::Activo)
+        {
+            boletosActivos.push_back(boleto);
+        }
+    }
+    nuevaCuenta.setBoletosActuales(boletosActivos);
+    nuevaCuenta.setBoletos(boletos);
 
     sqlite3_finalize(stmtCuenta);
     return nuevaCuenta;

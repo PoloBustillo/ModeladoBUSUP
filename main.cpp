@@ -92,7 +92,7 @@ int main()
             opcion = -1; // Invalid option
         }
 
-        if (opcion == 11)
+        if (opcion == 12)
         {
             Utils::printSuccess("Saliendo...");
             exit(0);
@@ -326,6 +326,18 @@ int main()
                 catch (const std::exception &e)
                 {
                     std::cerr << e.what() << '\n';
+                }
+            }
+            break;
+            case 11: // Mostrar boletos activos
+            {
+                std::vector<Boleto> boletos = DatabaseManager::getInstance().getBoletos(usuario.getCuenta().getId());
+                for (const auto &boleto : boletos)
+                {
+                    if (boleto.getStatus() == StatusBoleto::Activo)
+                    {
+                        boleto.mostrar();
+                    }
                 }
             }
             break;

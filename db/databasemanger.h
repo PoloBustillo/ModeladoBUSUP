@@ -23,14 +23,47 @@ public:
         }
         return instance;
     }
+    void executeQuery(const std::string &query, const std::string &errorMessage, const std::string &successMessage)
+    {
+        char *zErrMsg = 0;
+        int rc = sqlite3_exec(db, query.c_str(), callback, 0, &zErrMsg);
+        if (rc != SQLITE_OK)
+        {
+            Utils::printError(errorMessage + ": " + std::string(zErrMsg));
+            sqlite3_free(zErrMsg);
+            throw std::runtime_error(errorMessage + ": " + query);
+        }
+        else
+        {
 
+            Utils::printSuccess(successMessage);
+        }
+    }
+
+    sqlite3_stmt *prepareQuery(const std::string &query, const std::string &errorMessage)
+    {
+        sqlite3_stmt *stmt;
+        int rc = sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, 0);
+        if (rc != SQLITE_OK)
+        {
+            Utils::printError("Error al preparar query: " + std::string(sqlite3_errmsg(db)));
+            throw std::runtime_error("Error al preparar query: " + query);
+        }
+        rc = sqlite3_step(stmt);
+        if (rc != SQLITE_ROW)
+        {
+            sqlite3_finalize(stmt);
+            throw std::runtime_error(errorMessage);
+        }
+        return stmt;
+    }
     Usuario getUser(const std::string &matricula);
     Cuenta getAccount(const std::string &accountId);
     void registerTransaction(Transaccion transaction);
     std::vector<TarjetaBancaria> getCards(const std::string &accountId);
     std::vector<Boleto> getBoletos(const std::string &accountId);
     Usuario createUser();
-    Cuenta createAccount(const std::string &user, int tickets, const std::string &cards, double balance);
+    Cuenta createAccount(const std::string &id, double saldo);
     TarjetaBancaria addBankCard(TarjetaBancaria newCard, const std::string &accountId);
 
     sqlite3 *getDB() const { return db; }

@@ -77,36 +77,31 @@ public:
         }
     }
 
-    Boleto comprarBoleto()
+    void comprarBoleto()
     {
-        std::time_t t = std::time(nullptr);
-        std::tm *tm = std::localtime(&t);
-        tm->tm_mday += Config::getInstance().getExpiration();
-        std::mktime(tm);
-        char buffer[11];
-        std::strftime(buffer, sizeof(buffer), "%Y-%m-%d", tm);
-        std::string fechaExpiracion(buffer);
+        std::string fechaExpiracion = Utils::getDate(10);
         Boleto nuevoBoleto(fechaExpiracion, StatusBoleto::Nuevo);
         boletos.push_back(nuevoBoleto);
-
         // Insertar el boleto en la base de datos
         std::string sqlInsertBoleto = "INSERT INTO BOLETOS (ID, EXPIRACION, STATUS, CUENTA) VALUES ('" +
                                       nuevoBoleto.getId() + "', '" + fechaExpiracion + "', 'nuevo', '" + id + "');";
-        char *zErrMsg = 0;
-        int rc = sqlite3_exec(DatabaseManager::getInstance().getDB(), sqlInsertBoleto.c_str(), nullptr, 0, &zErrMsg);
+        DatabaseManager::getInstance().executeQuery(sqlInsertBoleto, "Error al insertar el boleto en la base de datos", "Boleto comprado exitosamente.");
+        nuevoBoleto.mostrar();
+    }
 
-        if (rc != SQLITE_OK)
+    int getTarjetaIndex()
+    {
+        std::cout << "\033[1;33mSeleccione la tarjeta para comprar boleto:\033[0m\n";
+        mostrarTarjetas();
+        int tarjetaIndex;
+        std::cout << "\033[1;33mIngrese el índice de la tarjeta:\033[0m ";
+        std::cin >> tarjetaIndex;
+        if (tarjetaIndex < 0 || tarjetaIndex >= tarjetasBancarias.size())
         {
-            Utils::printError("Error al insertar el boleto en la base de datos: " + std::string(zErrMsg));
-            sqlite3_free(zErrMsg);
-            throw std::runtime_error("Error al insertar el boleto en la base de datos.");
+
+            throw std::runtime_error("Índice de tarjeta inválido.");
         }
-        else
-        {
-            Utils::printSuccess("Boleto insertado en la BD.");
-            Utils::printSuccess("Boleto comprado exitosamente.");
-            return nuevoBoleto;
-        }
+        return tarjetaIndex;
     }
 
 private:

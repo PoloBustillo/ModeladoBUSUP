@@ -106,48 +106,40 @@ int main()
         {
             switch (opcion)
             {
-            case 1:
+            case 1: // Abonar cuenta
                 if (usuario.getCuenta().getTarjetasBancarias().empty())
                 {
                     Utils::printError("No tarjetas de crédito. No puede abonar.");
                 }
                 else
                 {
-                    std::cout << "\033[1;33mSeleccione la tarjeta para abonar:\033[0m\n";
-                    usuario.getCuenta().mostrarTarjetas();
-                    int tarjetaIndex;
-                    std::cout << "\033[1;33mIngrese el índice de la tarjeta:\033[0m ";
-                    std::string tarjetaIndexStr;
-                    std::cin >> tarjetaIndexStr;
-                    if (!std::all_of(tarjetaIndexStr.begin(), tarjetaIndexStr.end(), ::isdigit))
+                    try
                     {
-                        Utils::printError("Índice de tarjeta inválido.");
-                        break;
-                    }
-                    tarjetaIndex = std::stoi(tarjetaIndexStr);
-                    if (tarjetaIndex < 0 || tarjetaIndex >= usuario.getCuenta().getTarjetasBancarias().size())
-                    {
-                        Utils::printError("Índice de tarjeta inválido.");
-                        break;
-                    }
-                    double cantidad;
-                    std::cout << "\033[1;33mIngrese la cantidad a abonar:\033[0m ";
-                    std::string cantidadStr;
-                    std::cin >> cantidadStr;
-                    while (!std::all_of(cantidadStr.begin(), cantidadStr.end(), ::isdigit))
-                    {
-                        Utils::printError("Cantidad inválida. Ingrese solo dígitos.");
+                        int tarjetaIndex = usuario.getCuenta().getTarjetaIndex();
+                        double cantidad;
                         std::cout << "\033[1;33mIngrese la cantidad a abonar:\033[0m ";
+                        std::string cantidadStr;
                         std::cin >> cantidadStr;
-                    }
-                    cantidad = std::stod(cantidadStr);
+                        while (!std::all_of(cantidadStr.begin(), cantidadStr.end(), ::isdigit))
+                        {
+                            Utils::printError("Cantidad inválida. Ingrese solo dígitos.");
+                            std::cout << "\033[1;33mIngrese la cantidad a abonar:\033[0m ";
+                            std::cin >> cantidadStr;
+                        }
+                        cantidad = std::stod(cantidadStr);
 
-                    Transaccion transaccion(cantidad, StatusTransaccion::Abono, usuario.getMatricula(), usuario.getCuenta().getTarjetasBancarias()[tarjetaIndex].getId());
-                    DatabaseManager::getInstance().registerTransaction(transaccion);
-                    usuario.getCuenta().abonar(cantidad);
+                        Transaccion transaccion(cantidad, StatusTransaccion::Abono, usuario.getMatricula(), usuario.getCuenta().getTarjetasBancarias()[tarjetaIndex].getId());
+                        DatabaseManager::getInstance().registerTransaction(transaccion);
+                        usuario.getCuenta().abonar(cantidad);
+                    }
+                    catch (const std::runtime_error &e)
+                    {
+                        Utils::printError(e.what());
+                        continue;
+                    }
                 }
                 break;
-            case 2:
+            case 2: // Eliminar cuenta
                 char confirmacion;
                 std::cout << "\033[1;33m¿Está seguro que desea eliminar su cuenta? (s/n):\033[0m ";
                 std::cin >> confirmacion;
@@ -162,7 +154,7 @@ int main()
                     Utils::printSuccess("Eliminación de cuenta cancelada.");
                 }
                 break;
-            case 3:
+            case 3: // Comprar boleto
                 std::cout << "\033[1;33mSeleccione el método de pago:\033[0m\n";
                 std::cout << "1. Saldo\n";
                 std::cout << "2. Tarjeta\n";
@@ -177,18 +169,10 @@ int main()
                         usuario.getCuenta().setSaldo(newSaldo);
                         char *zErrMsg = 0;
                         std::string sqlUpdateSaldo = "UPDATE CUENTAS SET SALDO = " + std::to_string(newSaldo) + " WHERE ID = '" + usuario.getCuenta().getId() + "';";
-                        int rc = sqlite3_exec(DatabaseManager::getInstance().getDB(), sqlUpdateSaldo.c_str(), nullptr, 0, &zErrMsg);
-
-                        if (rc != SQLITE_OK)
-                        {
-                            Utils::printError("Error al actualizar el saldo en la base de datos: " + std::string(zErrMsg));
-                            sqlite3_free(zErrMsg);
-                            throw std::runtime_error("Error al actualizar el saldo en la base de datos.");
-                        }
-                        Boleto boleto = usuario.getCuenta().comprarBoleto();
-                        Transaccion transaccion(Config::getInstance().getBoletoCosto(), StatusTransaccion::Compra, usuario.getMatricula(), "SALDO CUENTA");
+                        DatabaseManager::getInstance().executeQuery(sqlUpdateSaldo, "Error al actualizar el saldo en la base de datos", "Saldo actualizado");
+                        Transaccion transaccion(Config::getInstance().getBoletoCosto(), StatusTransaccion::Compra, usuario.getMatricula(), usuario.getCuenta().getId());
                         DatabaseManager::getInstance().registerTransaction(transaccion);
-                        boleto.mostrar();
+                        usuario.getCuenta().comprarBoleto();
                     }
                     else
                     {
@@ -203,21 +187,18 @@ int main()
                     }
                     else
                     {
-                        std::cout << "\033[1;33mSeleccione la tarjeta para comprar boleto:\033[0m\n";
-                        usuario.getCuenta().mostrarTarjetas();
-                        int tarjetaIndex;
-                        std::cout << "\033[1;33mIngrese el índice de la tarjeta:\033[0m ";
-                        std::cin >> tarjetaIndex;
-                        if (tarjetaIndex < 0 || tarjetaIndex >= usuario.getCuenta().getTarjetasBancarias().size())
+                        try
                         {
-                            Utils::printError("Índice de tarjeta inválido.");
-                        }
-                        else
-                        {
+                            int tarjetaIndex;
+                            tarjetaIndex = usuario.getCuenta().getTarjetaIndex();
                             Transaccion transaccion(Config::getInstance().getBoletoCosto(), StatusTransaccion::Tarjeta, usuario.getMatricula(), usuario.getCuenta().getTarjetasBancarias()[tarjetaIndex].getId());
                             DatabaseManager::getInstance().registerTransaction(transaccion);
-                            Boleto boleto = usuario.getCuenta().comprarBoleto();
-                            boleto.mostrar();
+                            usuario.getCuenta().comprarBoleto();
+                        }
+                        catch (const std::runtime_error &e)
+                        {
+                            Utils::printError(e.what());
+                            continue;
                         }
                     }
                 }
@@ -226,9 +207,8 @@ int main()
                     Utils::printError("Método de pago inválido.");
                 }
                 break;
-            case 4:
+            case 4: // Usar boleto
             {
-
                 std::string fechaActual = Utils::getDate();
 
                 std::vector<Boleto> boletosValidos;

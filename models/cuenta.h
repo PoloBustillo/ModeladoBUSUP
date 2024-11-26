@@ -128,7 +128,6 @@ public:
 private:
     std::string id;
     double saldo;
-    std::vector<Boleto> idBoletoActual;
     std::vector<TarjetaBancaria> tarjetasBancarias;
     std::vector<Boleto> boletos;
     std::vector<Boleto> boletosActuales;

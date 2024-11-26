@@ -354,6 +354,6 @@ int main()
             Utils::printError(e.what());
         }
     }
-
+    DatabaseManager::getInstance().closeDatabase();
     return 0;
 }

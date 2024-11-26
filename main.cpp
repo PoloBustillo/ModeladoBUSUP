@@ -198,6 +198,7 @@ int main()
                 std::string fechaActual = Utils::getDate();
                 int boletoIndex;
                 std::vector<Boleto> boletos = DatabaseManager::getInstance().getBoletos(usuario.getCuenta().getId());
+                usuario.getCuenta().setBoletos(boletos);
                 usuario.getCuenta().mostrarBoletos();
 
                 std::cout << "\033[1;33mIngrese el índice del boleto a usar:\033[0m ";
@@ -305,8 +306,12 @@ int main()
             }
             break;
             case 9:
+            {
+                std::vector<Boleto> boletos = DatabaseManager::getInstance().getBoletos(usuario.getCuenta().getId());
+                usuario.getCuenta().setBoletos(boletos);
                 usuario.getCuenta().mostrarBoletos();
-                break;
+            }
+            break;
             case 10: // Eliminar Tarjeta
             {
                 try
@@ -333,6 +338,7 @@ int main()
             {
 
                 std::vector<Boleto> boletos = DatabaseManager::getInstance().getBoletos(usuario.getCuenta().getId());
+                usuario.getCuenta().setBoletos(boletos);
                 for (const auto &boleto : boletos)
                 {
                     if (boleto.getStatus() == StatusBoleto::Activo)

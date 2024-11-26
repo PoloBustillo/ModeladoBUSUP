@@ -15,7 +15,7 @@ public:
     static std::string validateMatricula()
     {
         std::string matricula;
-        std::cout << "\033[1;33mIngrese su nombre de matrícula:\033[0m ";
+        std::cout << "\033[1;33mIngrese su número de matrícula:\033[0m ";
         std::cin >> matricula;
         while (matricula.length() != 7 || !std::all_of(matricula.begin(), matricula.end(), ::isdigit))
         {

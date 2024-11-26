@@ -42,6 +42,10 @@ public:
                 cuenta = usuarioFromDB.getCuenta();
                 return true;
             }
+            else
+            {
+                throw std::runtime_error("Contraseña no es correcta");
+            }
         }
         catch (const std::runtime_error &e)
         {

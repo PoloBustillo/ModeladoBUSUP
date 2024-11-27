@@ -79,7 +79,7 @@ int main()
     {
         std::vector<std::string> menuOptions = {"Abonar a mi cuenta", "Eliminar mi cuenta", "Comprar boleto", "Usar boleto", "Mostrar cuenta",
                                                 "Agregar Tarjeta", "Mostrar tarjetas", "Mostrar Transacciones", "Mostrar Boletos", "Eliminar Tarjeta",
-                                                "Mostrat boletos activos", "Salir"};
+                                                "Mostrar boletos activos", "Salir"};
         Utils::printMenu(menuOptions);
         std::string input;
         std::cin >> input;
